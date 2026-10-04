@@ -493,8 +493,10 @@ function paintSettings() {
     <div class="card"><h2>Accountability PIN</h2>
       <p class="sub">A friend or parent sets this. Then ending a session, switching to warn mode, deleting a class, or clearing the log needs it.</p>
       <div class="row">${S.has_pin?'<div class="field"><label>Current PIN</label><input type="password" id="op" inputmode="numeric"></div>':''}
-        <div class="field"><label>${S.has_pin?'New PIN (blank to remove)':'Set a PIN'}</label><input type="password" id="np" inputmode="numeric"></div></div>
-      <button class="btn ghost" id="pinbtn">${S.has_pin?'Change PIN':'Set PIN'}</button></div>
+        <div class="field"><label>${S.has_pin?'New PIN':'Set a PIN'}</label><input type="password" id="np" inputmode="numeric"></div></div>
+      <div class="btnrow"><button class="btn ghost" id="pinbtn">${S.has_pin?'Change PIN':'Set PIN'}</button>
+        ${S.has_pin?'<button class="btn danger" id="pinrm">Remove PIN</button>':''}</div>
+      ${S.has_pin?'<p class="small muted mt">To remove it, type the current PIN above, then press Remove PIN.</p>':''}</div>
     <div class="card"><h2>This Mac</h2>
       <div class="btnrow"><button class="btn ghost sm" id="acc">Accessibility settings</button>
         <button class="btn ghost sm" id="data">Open data folder</button></div>
@@ -538,6 +540,8 @@ function paintSettings() {
   $('#apply').onclick = async () => { $('#apply').disabled = true;
     const r = await api().set_engine($('#be').value, $('#mdl').value, $('#om')?.value || '');
     if (r.error) toast(r.error); else { S = r; toast('Applied. Preparing…'); paint(); } };
+  if ($('#pinrm')) $('#pinrm').onclick = async () => { const r = await api().remove_pin($('#op').value || '');
+    if (r.error) toast(r.error); else { S = r; toast('PIN removed.'); paint(); } };
   $('#pinbtn').onclick = async () => { const r = await api().set_pin($('#op')?.value || '', $('#np').value);
     if (r.error) toast(r.error); else { S = r; toast('PIN updated.'); paint(); } };
   $('#acc').onclick = () => api().open_accessibility_settings();

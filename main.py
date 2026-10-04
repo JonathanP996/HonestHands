@@ -82,6 +82,10 @@ class OverlayApi:
 class App:
     def __init__(self):
         self.store = Store()
+        if os.environ.get('HH_RESET_PIN') == '1' and self.store.data.get('pin'):
+            self.store.data['pin'] = ''   # developer escape hatch for a forgotten PIN
+            self.store.save()
+            print('Accountability PIN cleared (HH_RESET_PIN=1).')
         self.engine = Engine(self.store)
         self.judge = Judge(self.store, self.engine)
         self.guard = watcher.Guard(self.store, self.judge)

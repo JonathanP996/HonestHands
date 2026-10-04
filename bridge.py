@@ -368,6 +368,13 @@ class Api:
         self._store.save()
         return self.state()
 
+    def remove_pin(self, pin):
+        if not self._pin_ok(pin):
+            return _err('That PIN doesn\'t match.')
+        self._store.data['pin'] = ''
+        self._store.save()
+        return self.state()
+
     def open_accessibility_settings(self):
         watcher.has_accessibility(prompt=True)
         watcher.open_accessibility_settings()

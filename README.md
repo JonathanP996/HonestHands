@@ -38,7 +38,7 @@ This produces **HonestHands.app** and **HonestHands.dmg**. Open the DMG, drag th
 ## Notes
 
 - Keyword rules run first and instantly; the AI judge handles the rest and pre-checks your draft while you type, so sending feels immediate. If the AI isn't ready, it falls back to keyword rules rather than freezing your keyboard.
-- Optional accountability PIN (Settings): a parent or partner sets it, and then loosening or clearing anything needs it. Export a report from Activity.
+- Optional accountability PIN (Settings): a parent or partner sets it, and then loosening or clearing anything needs it. Export a report from Activity. Remove it in Settings › Accountability PIN with the current PIN. Forgotten PIN (e.g. during development): start once with `HH_RESET_PIN=1 python3 main.py`.
 - Covers AI desktop apps and AI websites in browsers, not phones or AI built into other apps yet.
 - It's an honor-system tool; it works best paired with someone who sees your reports.
 
