@@ -424,10 +424,10 @@ class Api:
         by_site, by_class = {}, {}
         for m in msgs:
             by_site[site_name(m.get('where'))] = by_site.get(site_name(m.get('where')), 0) + 1
-            c = by_class.setdefault(m.get('class') or 'Other', {'clean': 0, 'flagged': 0, 'overridden': 0})
-            k = kind_of(m['result'])
-            if k in c: c[k] += 1
         classes_cfg = {c['name']: c.get('color') for c in self._store.data['classes']}
+        for s in sess:                                   # time spent per class
+            c = by_class.setdefault(s.get('class') or 'Other', {'seconds': 0, 'sessions': 0})
+            c['seconds'] += s.get('seconds', 0); c['sessions'] += 1
         last7 = []
         for i in range(6, -1, -1):
             dd = today - timedelta(days=i)
@@ -454,7 +454,7 @@ class Api:
             'heat': heat,
             'sites': sorted(({'name': k, 'n': v} for k, v in by_site.items()), key=lambda x: -x['n'])[:6],
             'classes': sorted(({'name': k, 'color': 'ink' if k == 'Tutor mode' else (classes_cfg.get(k) or 'lav'), **v}
-                               for k, v in by_class.items()), key=lambda x: -(x['clean'] + x['flagged'] + x['overridden']))[:6],
+                               for k, v in by_class.items()), key=lambda x: -x['seconds'])[:6],
             'last7': last7,
         }
 

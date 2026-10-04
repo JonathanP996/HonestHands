@@ -535,3 +535,21 @@ select.mini{width:auto;padding:6px 10px;font-size:12.5px;border-radius:999px}
 .sd-meta{font-size:12.5px;color:var(--muted)}.sd-meta b{color:var(--ink)}
 .sd-text{font-family:var(--fig);font-style:italic;font-size:14.5px;margin-top:3px}
 .sd-why{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+/* horizontal bars with the label ON the bar (sites + classes) */
+.hbar{position:relative;height:48px;border-radius:14px;overflow:hidden;margin:13px 0;
+  background:color-mix(in srgb,var(--muted) 14%,transparent)}
+.hfill{position:absolute;top:0;bottom:0;left:0;width:0;border-radius:14px;overflow:hidden;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--green) 45%,transparent),color-mix(in srgb,var(--green) 78%,transparent));
+  transition:width 1.3s cubic-bezier(.2,.85,.2,1) var(--d,0ms)}
+.hfill::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.26),transparent);
+  animation:shine 3.2s ease-in-out infinite;animation-delay:var(--d,0ms)}
+.hbar[class*="cc-"] .hfill{background:linear-gradient(90deg,color-mix(in srgb,var(--cd) 50%,transparent),color-mix(in srgb,var(--cd) 85%,transparent))}
+.hbar.cc-ink .hfill{background:linear-gradient(90deg,color-mix(in srgb,#808693 45%,transparent),color-mix(in srgb,#808693 75%,transparent))}
+.hlabel{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;height:100%;padding:0 16px;color:var(--ink)}
+.hlabel b{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hlabel span{font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap;opacity:.9}
+@media (prefers-reduced-motion:reduce){.hfill::after{animation:none!important}.hfill{transition:none!important}}
+
+/* history: give the big headline room under the page title */
+.hist{padding-top:34px}

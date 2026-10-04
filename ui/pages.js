@@ -69,8 +69,7 @@ function paintInsights() {
     </div>
 
     <div class="ins-bot">
-      <div class="icard rise" style="--i:5"><div class="ihead"><h2>By class</h2>
-        <span class="legend"><i class="ok"></i>clean <i class="some"></i>flagged <i class="bad"></i>overridden</span></div>
+      <div class="icard rise" style="--i:5"><div class="ihead"><h2>Time by class</h2><span class="icap" id="i-classcap"></span></div>
         <div class="classbars" id="i-classes"></div></div>
       <div class="icard rise" style="--i:6"><div class="ihead"><h2>This week</h2><span class="icap" id="i-run"></span></div>
         <div class="week" id="i-week"></div></div>
@@ -99,12 +98,11 @@ function paintInsights() {
     if (!same('sites', d.sites)) {
       const tot = d.sites.reduce((a, s) => a + s.n, 0) || 1;
       $('#i-sitecap').textContent = `TOTAL SITES | ${d.sites.length}`;
-      $('#i-sites').innerHTML = d.sites.map((s, i) => { const p = Math.round(100 * s.n / tot);
-        return `<div class="sitebar"><span class="sbadge" style="--hue:${(i * 47 + 150) % 360}">${h(s.name[0])}</span>
-          <div class="strack"><div class="sfill" data-w="${Math.max(p, 9)}" style="--d:${i * 90}ms"><span>${p}%</span></div></div>
-          <span class="scount">${s.n} PROMPT${s.n === 1 ? '' : 'S'} · ${h(s.name)}</span></div>`; }).join('')
+      $('#i-sites').innerHTML = d.sites.map((s, i) => { const pc = Math.round(100 * s.n / tot);
+        return `<div class="hbar"><div class="hfill" data-w="${Math.max(100 * s.n / tot, 3)}" style="--d:${i * 90}ms"></div>
+          <div class="hlabel"><b>${h(s.name)}</b><span>${pc}% · ${s.n} prompt${s.n === 1 ? '' : 's'}</span></div></div>`; }).join('')
         || '<p class="muted">No messages yet. Start a session and they\'ll show up here.</p>';
-      nextFrame(() => $('#i-sites').querySelectorAll('.sfill').forEach(f => f.style.width = f.dataset.w + '%'));
+      nextFrame(() => $('#i-sites').querySelectorAll('.hfill').forEach(f => f.style.width = f.dataset.w + '%'));
     }
     // streak + heatmap
     countTo($('#i-streak'), d.streak.current, { dur: 900 });
@@ -125,15 +123,16 @@ function paintInsights() {
           const tip = c.n ? `${when} · ${c.n} session${c.n === 1 ? '' : 's'} · ${fmtLong(c.s)} · ${c.c} checked` : `${when} · no sessions`;
           return `<i class="hc l${lvl(c)} ${c.d === today ? 'today' : ''}" data-tip="${h(tip)}" style="--dl:${ci * 22 + r * 7}ms"></i>`; }).join('')}</div>`).join('') + `</div>`;
     }
-    // classes
+    // time by class
     if (!same('classes', d.classes)) {
-      $('#i-classes').innerHTML = d.classes.map((c, i) => { const sum = c.clean + c.flagged + c.overridden, tot = sum || 1;
-        const seg = (k, cls) => c[k] ? `<div class="seg ${cls}" data-w="${100 * c[k] / tot}" style="--d:${i * 100}ms" title="${c[k]} ${k}"></div>` : '';
-        return `<div class="cbar"><div class="cname"><i class="cdot cc-${c.color}"></i>${h(c.name)}</div>
-          <div class="cstack">${seg('clean', 'ok')}${seg('flagged', 'some')}${seg('overridden', 'bad')}</div>
-          <b class="ctot">${sum}</b></div>`; }).join('')
+      const mx = Math.max(1, ...d.classes.map(c => c.seconds)), all = d.classes.reduce((a, c) => a + c.seconds, 0);
+      const fmtT = s => s < 60 ? (s > 0 ? '<1m' : '0m') : fmtLong(s);
+      $('#i-classcap').textContent = `TOTAL | ${fmtT(all).toUpperCase()}`;
+      $('#i-classes').innerHTML = d.classes.map((c, i) =>
+        `<div class="hbar cc-${c.color}"><div class="hfill" data-w="${Math.max(100 * c.seconds / mx, 3)}" style="--d:${i * 100}ms"></div>
+          <div class="hlabel"><b>${h(c.name)}</b><span>${fmtT(c.seconds)} · ${c.sessions} lock-in${c.sessions === 1 ? '' : 's'}</span></div></div>`).join('')
         || '<p class="muted">Add a class and start a session to see this.</p>';
-      nextFrame(() => $('#i-classes').querySelectorAll('.seg').forEach(s => s.style.width = s.dataset.w + '%'));
+      nextFrame(() => $('#i-classes').querySelectorAll('.hfill').forEach(f => f.style.width = f.dataset.w + '%'));
     }
     // week
     if (!same('week', d.last7)) {
