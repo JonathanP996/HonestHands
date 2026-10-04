@@ -1,7 +1,7 @@
 """Everything the app window can ask for. Each method returns plain data (or {'error': ...})."""
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import distill
 import docs
@@ -21,15 +21,49 @@ RESULT_LABEL = {'ok': 'CLEAN', 'ok (disclose)': 'CLEAN (AI use to disclose)', 'o
                 'sent after warning': 'OVERRIDDEN (SENT DESPITE WARNING)'}
 
 
+def kind_of(result):
+    if result in OVERRIDDEN:
+        return 'overridden'
+    if result in ('warned', 'blocked'):
+        return 'flagged'
+    if result == 'ok (revised)':
+        return 'revised'
+    return 'clean' if str(result).startswith('ok') else 'other'
+
+
+def dedupe(msgs, window=12):
+    """One send can be logged by the keyboard guard, the click guard and the browser extension.
+    Collapse identical entries (same text, site, result) that land within a few seconds."""
+    out, last = [], {}
+    for m in sorted(msgs, key=lambda e: e['t']):
+        k = (m.get('text'), m.get('where'), m.get('result'))
+        if k in last and m['t'] - last[k] < window:
+            continue
+        last[k] = m['t']
+        out.append(m)
+    return out
+
+
 def tally(msgs):
     """clean / flagged (stopped) / revised (fixed, then passed) / overridden (sent despite a warning)."""
-    res = [m['result'] for m in msgs]
-    over = sum(1 for r in res if r in OVERRIDDEN)
-    warned = sum(1 for r in res if r in ('warned', 'blocked'))
-    return {'clean': sum(1 for r in res if r.startswith('ok') and r != 'ok (revised)'),
-            'revised': sum(1 for r in res if r == 'ok (revised)'),
-            'overridden': over,
+    res = [kind_of(m['result']) for m in dedupe(msgs)]
+    over, warned = res.count('overridden'), res.count('flagged')
+    return {'clean': res.count('clean'), 'revised': res.count('revised'), 'overridden': over,
             'flagged': max(0, warned - over)}   # every overridden send was warned first; don't count it twice
+
+
+SITE_NAMES = (('gemini', 'Gemini'), ('chatgpt', 'ChatGPT'), ('openai', 'ChatGPT'), ('claude', 'Claude'),
+              ('deepseek', 'DeepSeek'), ('perplexity', 'Perplexity'), ('copilot', 'Copilot'), ('grok', 'Grok'),
+              ('meta', 'Meta AI'), ('mistral', 'Mistral'), ('poe', 'Poe'), ('aistudio', 'AI Studio'),
+              ('notebooklm', 'NotebookLM'))
+
+
+def site_name(where):
+    w = (where or '').lower()
+    for key, nice in SITE_NAMES:
+        if key in w:
+            return nice
+    return (where or 'Other').replace('www.', '')
 
 
 class Api:
@@ -323,6 +357,9 @@ class Api:
             inwin = [m for m in msgs if a <= m['t'] <= b]
             sdef['checks'] = len(inwin)
             sdef.update(tally(inwin))
+            sdef['id'] = sdef['start']
+            c = next((x for x in self._store.data['classes'] if x['name'] == sdef['class']), None)
+            sdef['color'] = 'ink' if sdef['class'] == 'Tutor mode' else ((c or {}).get('color') or 'lav')
             sdef['seconds'] = int((sdef['end'] or time.time()) - sdef['start'])
             sdef['live'] = sdef['end'] is None
         out.reverse()
@@ -332,13 +369,96 @@ class Api:
     def get_log(self, limit=200):
         return list(reversed(self._store.read_log(limit)))
 
-    def get_log_page(self, page=1, per_page=25):
-        rows = list(reversed(self._store.read_log()))
+    def get_log_page(self, page=1, per_page=25, kind='all'):
+        allrows = list(reversed(self._store.read_log()))
+        counts = {'all': len(allrows), 'flagged': 0, 'overridden': 0, 'revised': 0, 'clean': 0}
+        for r in allrows:
+            if 'result' in r:
+                counts[kind_of(r['result'])] = counts.get(kind_of(r['result']), 0) + 1
+        rows = allrows if kind == 'all' else [r for r in allrows if 'result' in r and kind_of(r['result']) == kind]
         per_page = max(5, min(int(per_page or 25), 100))
         pages = max(1, -(-len(rows) // per_page))
         page = max(1, min(int(page or 1), pages))
         return {'rows': rows[(page - 1) * per_page: page * per_page], 'page': page, 'pages': pages,
-                'total': len(rows), 'per_page': per_page}
+                'total': len(rows), 'per_page': per_page, 'counts': counts, 'kind': kind}
+
+    def session_messages(self, start, end=None):
+        """Every checked message inside one study session, oldest first."""
+        end = end or time.time() + 1
+        msgs = [e for e in self._store.read_log() if 'result' in e and start <= e['t'] <= end]
+        out = []
+        for m in dedupe(msgs):
+            out.append(dict(m, kind=kind_of(m['result'])))
+        return out
+
+    def insights(self):
+        events = self._store.read_log()
+        msgs = dedupe([e for e in events if 'result' in e])
+        sess = self.sessions(100000)
+        today = datetime.now().date()
+        def day(t): return datetime.fromtimestamp(t).date()
+        per_day = {}
+        for s in sess:
+            d = per_day.setdefault(day(s['start']), {'s': 0, 'n': 0, 'c': 0})
+            d['s'] += s.get('seconds', 0); d['n'] += 1
+        for m in msgs:
+            per_day.setdefault(day(m['t']), {'s': 0, 'n': 0, 'c': 0})['c'] += 1
+        # calendar grid: whole weeks (Sunday first), ending with the current week
+        start = today - timedelta(days=(today.weekday() + 1) % 7 + 7 * 17)
+        heat = []
+        d = start
+        while d <= today:
+            v = per_day.get(d, {'s': 0, 'n': 0, 'c': 0})
+            heat.append({'d': d.isoformat(), 's': v['s'], 'n': v['n'], 'c': v['c'], 'dow': (d.weekday() + 1) % 7})
+            d += timedelta(days=1)
+        active = sorted(k for k, v in per_day.items() if v['n'] > 0)
+        aset = set(active)
+        cur, probe = 0, today if today in aset else today - timedelta(days=1)
+        while probe in aset:
+            cur += 1; probe -= timedelta(days=1)
+        longest = run = 0
+        prev = None
+        for k in active:
+            run = run + 1 if prev and (k - prev).days == 1 else 1
+            longest = max(longest, run); prev = k
+        t = tally(msgs)
+        total = sum(t.values())
+        by_site, by_class = {}, {}
+        for m in msgs:
+            by_site[site_name(m.get('where'))] = by_site.get(site_name(m.get('where')), 0) + 1
+            c = by_class.setdefault(m.get('class') or 'Other', {'clean': 0, 'flagged': 0, 'revised': 0, 'overridden': 0})
+            k = kind_of(m['result'])
+            if k in c: c[k] += 1
+        classes_cfg = {c['name']: c.get('color') for c in self._store.data['classes']}
+        last7 = []
+        for i in range(6, -1, -1):
+            dd = today - timedelta(days=i)
+            todays = [m for m in msgs if day(m['t']) == dd]
+            tt = tally(todays)
+            last7.append({'d': dd.isoformat(), 'label': dd.strftime('%a'), 'total': len(todays),
+                          'bad': tt['flagged'] + tt['overridden']})
+        run_now = best_run = 0
+        for m in msgs:
+            if kind_of(m['result']) in ('flagged', 'overridden'):
+                run_now = 0
+            else:
+                run_now += 1; best_run = max(best_run, run_now)
+        ai_ms = [m['ms'] for m in msgs if m.get('source') == 'ai' and m.get('ms')]
+        secs = [s.get('seconds', 0) for s in sess]
+        return {
+            'totals': dict(t, total=total, sessions=len(sess), seconds=sum(secs),
+                           longest_session=max(secs) if secs else 0,
+                           avg_session=int(sum(secs) / len(secs)) if secs else 0,
+                           avg_ms=int(sum(ai_ms) / len(ai_ms)) if ai_ms else 0),
+            'clean_rate': round(100 * (t['clean'] + t['revised']) / total) if total else 100,
+            'streak': {'current': cur, 'longest': longest, 'today_done': today in aset},
+            'clean_run': {'current': run_now, 'best': best_run},
+            'heat': heat,
+            'sites': sorted(({'name': k, 'n': v} for k, v in by_site.items()), key=lambda x: -x['n'])[:6],
+            'classes': sorted(({'name': k, 'color': 'ink' if k == 'Tutor mode' else (classes_cfg.get(k) or 'lav'), **v}
+                               for k, v in by_class.items()), key=lambda x: -(x['clean'] + x['flagged'] + x['revised'] + x['overridden']))[:6],
+            'last7': last7,
+        }
 
     def export_log(self):
         import webview

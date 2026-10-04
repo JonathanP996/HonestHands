@@ -51,6 +51,7 @@ const TAB_META = {
   log:       { title: 'Activity',      crumb: 'What the guard has checked' },
   community: { title: 'Community',      crumb: 'HonestHands' },
   history:   { title: 'History',        crumb: 'Your study sessions' },
+  insights:  { title: 'Insights',       crumb: 'How you\'re doing' },
   settings:  { title: 'Settings',      crumb: 'HonestHands' },
 };
 function engineChipHTML() {
@@ -81,7 +82,7 @@ function paint() {
   if (sess) chips += extChipHTML();
   chips += engineChipHTML();
   $('#chips').innerHTML = chips;
-  ({ home: paintHome, classes: paintClasses, log: paintLog, history: paintHistory, community: paintCommunity, settings: paintSettings }[TAB])();
+  ({ home: paintHome, classes: paintClasses, log: paintLog, history: paintHistory, insights: paintInsights, community: paintCommunity, settings: paintSettings }[TAB])();
   const m = document.getElementById('main'); m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter');
 }
 document.querySelectorAll('#rail .railbtn[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; paint(); });
@@ -412,15 +413,16 @@ async function editClass(id) {
 
 // ---- Activity log ----
 const COLORS = ['lav', 'mint', 'sun', 'sky', 'rose', 'peach', 'sage', 'sand'];
-let LOGPAGE = 1;
+let LOGPAGE = 1, LOGKIND = 'all';
 async function paintLog() {
   const m = $('#main');
   m.innerHTML = `<div class="wrap"><div class="row" style="align-items:center">
     <div style="flex:2"><h1>Activity</h1><p class="sub">Everything the guard has checked. Stored only on this Mac.</p></div>
     <div style="flex:1;text-align:right"><div class="btnrow" style="justify-content:flex-end">
       <button class="btn ghost sm" id="exp">Export report</button><button class="btn danger sm" id="clr">Clear</button></div></div></div>
+    <div class="filters" id="logfilters"></div>
     <div class="card" id="loglist"><p class="muted">Loading…</p></div></div>`;
-  const pg = await api().get_log_page(LOGPAGE, 25);
+  const pg = await api().get_log_page(LOGPAGE, 25, LOGKIND);
   LOGPAGE = pg.page;
   const rows = pg.rows.map(e => {
     const when = new Date(e.t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -433,6 +435,10 @@ async function paintLog() {
       ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
       <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
   }).join('');
+  const FILTERS = [['all', 'All', ''], ['flagged', 'Flagged', 'warn'], ['overridden', 'Overridden', 'bad'], ['revised', 'Revised', 'fix'], ['clean', 'Clean', 'ok']];
+  $('#logfilters').innerHTML = FILTERS.map(([k, label, cls]) => `<button class="fchip ${LOGKIND === k ? 'on' : ''}" data-k="${k}">
+    ${cls ? `<span class="idot ${cls}"></span>` : ''}${label}<span class="fcount">${pg.counts[k] ?? 0}</span></button>`).join('');
+  $('#logfilters').querySelectorAll('.fchip').forEach(b => b.onclick = () => { LOGKIND = b.dataset.k; LOGPAGE = 1; paintLog(); });
   const pager = () => {
     if (pg.pages <= 1) return '';
     const nums = []; const add = n => { if (nums[nums.length - 1] !== n) nums.push(n); };
@@ -443,47 +449,11 @@ async function paintLog() {
       ${nums.map(n => n === '…' ? '<span class="pg gap">…</span>' : `<button class="pg ${n === pg.page ? 'on' : ''}" data-pg="${n}">${n}</button>`).join('')}
       <button class="pg arrow" data-pg="${pg.page + 1}" ${pg.page === pg.pages ? 'disabled' : ''} aria-label="Older">›</button></div></div>`;
   };
-  $('#loglist').innerHTML = (rows || '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>') + pager();
+  $('#loglist').innerHTML = (rows || (LOGKIND === 'all' ? '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>' : '<p class="muted">Nothing in this category.</p>')) + pager();
   $('#loglist').querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { LOGPAGE = +b.dataset.pg; paintLog(); $('#main').scrollTop = 0; });
   $('#exp').onclick = async () => { const p = await api().export_log(); if (p) toast('Saved to ' + p.split('/').pop()); };
   $('#clr').onclick = async () => { const pin = await askPin('Enter the PIN to clear the log.'); if (pin === null) return;
     const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else { LOGPAGE = 1; paintLog(); } };
-}
-
-// ---- History (study sessions) ----
-async function paintHistory() {
-  const m = $('#main');
-  m.innerHTML = `<div class="wrap"><div class="card" id="histcard"><p class="muted">Loading…</p></div></div>`;
-  const sessions = await api().sessions(200);
-  const totalSec = sessions.reduce((a,s)=>a+(s.seconds||0),0);
-  const totalChecks = sessions.reduce((a,s)=>a+(s.checks||0),0);
-  const head = `<div class="tiles" style="margin-bottom:18px">
-    <div class="tile mint"><div class="k">Sessions</div><div class="v">${sessions.length}</div><div class="foot">all time</div></div>
-    <div class="tile sky"><div class="k">Time locked in</div><div class="v">${fmtLong(totalSec)}</div><div class="foot">studying guarded</div></div>
-    <div class="tile sun"><div class="k">Messages checked</div><div class="v">${totalChecks}</div><div class="foot">across sessions</div></div>
-    <div class="tile lav"><div class="k">Overridden</div><div class="v">${sessions.reduce((a,s)=>a+(s.overridden||0),0)}</div><div class="foot">sent despite a warning</div></div>
-  </div>`;
-  const rows = sessions.map(sdef => {
-    const d = new Date(sdef.start*1000);
-    const mon = d.toLocaleString([], {month:'short'});
-    const day = d.getDate();
-    const time = d.toLocaleString([], {hour:'numeric', minute:'2-digit'});
-    const dur = sdef.live ? 'in progress' : fmtLong(sdef.seconds);
-    const n = (k, cls, word) => sdef[k] > 0 ? `<span class="badge ${cls}">${sdef[k]} ${word}</span>` : '';
-    const others = n('overridden', 'bad', 'overridden') + n('flagged', 'some', 'flagged') + n('revised', 'fix', 'revised');
-    const badge = sdef.live ? '<span class="badge live">● live</span>'
-                 : `<div class="hbadges">${others}${others ? n('clean', 'ok', 'clean') : '<span class="badge">clean</span>'}</div>`;
-    return `<div class="hrow">
-      <div class="cal"><div class="m">${mon}</div><div class="d">${day}</div></div>
-      <div class="mid"><div class="name">${h(sdef.class)}${sdef.assignment?' <span class="muted">/ '+h(sdef.assignment)+'</span>':''}</div>
-        <div class="sub">${time} · ${sdef.checks} checked</div></div>
-      <div class="dur">${dur}</div>${badge}</div>`;
-  }).join('');
-  $('#histcard').outerHTML = `<div>${head}<div class="card">
-    <h2 style="margin-bottom:6px">Your lock-ins</h2>
-    <p class="sub">Every study session you guarded, newest first.</p>
-    ${rows || '<p class="muted">No sessions yet. Start one from the Study session tab and it\'ll show up here.</p>'}
-  </div></div>`;
 }
 
 // ---- Community (placeholder for the future) ----
