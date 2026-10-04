@@ -6,6 +6,7 @@ from datetime import datetime
 import distill
 import docs
 import rules
+from store import TUTOR_CLASS
 import watcher
 from store import APP_DIR, new_id
 
@@ -48,6 +49,7 @@ class Api:
                     'started': started, 'elapsed': int(time.time() - started) if started else 0}
         return {
             'classes': classes,
+            'tutor_mode': {k: v for k, v in TUTOR_CLASS.items() if k != 'policy_text'},
             'session': sess,
             'mode': s.data.get('mode', 'warn'),
             'has_pin': bool(s.data.get('pin')),

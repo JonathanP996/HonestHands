@@ -267,39 +267,35 @@ function paintHome() {
       if (pin === null) return; const r = await api().set_mode(to, pin || ''); if (r.error) toast(r.error); else refresh(); };
     return;
   }
-  if (!S.classes.length) {
-    m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
-      <div class="card center" style="padding:40px">
-        <h1>Welcome</h1><p class="sub" style="margin:10px auto 20px">Add a class and its syllabus. The guard learns that class's AI rules and checks your messages against them while you study.</p>
-        <button class="btn" onclick="TAB='classes';paint()">Add your first class</button></div></div>`;
-    return;
-  }
-  let selC = S.classes[0].id, selA = '', selM = 'warn';
+  const TUTOR = S.tutor_mode, ALL = [TUTOR, ...S.classes];
+  let selC = (S.classes[0] || TUTOR).id, selA = '', selM = 'warn';
   m.innerHTML = `<div class="wrap sess">${permBanner()}${engineBanner()}
     <div class="sess-hero"><div><h1>Start a study session</h1>
       <p class="sub" style="margin:6px 0 0">Pick what you're working on. The guard stays idle until you do.</p></div></div>
     <div class="step"><span class="n">1</span>Which class?</div>
     <div class="classgrid" id="cg"></div>
-    <div class="step"><span class="n">2</span>Which assignment?</div>
-    <div class="seg" id="ag"></div>
+    <div id="asgstep"><div class="step"><span class="n">2</span>Which assignment?</div>
+    <div class="seg" id="ag"></div></div>
     <div class="step"><span class="n">3</span>When you cross a line</div>
     <div class="modes" id="mg">
       <button class="mode warn" data-m="warn"><div class="ic">✋</div><div><b>Warn me</b><span>I can override it, and it's logged.</span></div></button>
       <button class="mode block" data-m="block"><div class="ic">🛑</div><div><b>Block the message</b><span>It won't send until I change it.</span></div></button>
     </div>
+    ${S.classes.length ? '' : `<p class="small muted" style="margin-top:18px">Want your own syllabus rules? <a href="#" onclick="TAB='classes';paint();return false">Add a class</a> any time.</p>`}
     <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
-  const cls = () => S.classes.find(x => x.id === selC);
+  const cls = () => ALL.find(x => x.id === selC);
   const paintPicks = () => {
-    $('#cg').innerHTML = S.classes.map(c => { const k = (c.assignments || []).length;
-      return `<button class="pick ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
-        <span class="nm">${h(c.name)}</span><span class="meta">${h(S.policy_labels[c.policy] || '')} · ${k} assignment${k === 1 ? '' : 's'}</span></button>`; }).join('');
+    $('#cg').innerHTML = ALL.map(c => { const k = (c.assignments || []).length;
+      return `<button class="pick ${c.builtin ? 'tutor' : ''} ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
+        <span class="nm">${h(c.name)}</span><span class="meta">${c.builtin ? 'No class needed · AI as a study partner' : h(S.policy_labels[c.policy] || '') + ' · ' + k + ' assignment' + (k === 1 ? '' : 's')}</span></button>`; }).join('');
     const asg = cls().assignments || [];
+    $('#asgstep').hidden = !!cls().builtin;
     if (!asg.some(a => a.id === selA)) selA = '';
     $('#ag').innerHTML = `<button class="${selA === '' ? 'on' : ''}" data-a="">General work</button>` +
       asg.map(a => `<button class="${a.id === selA ? 'on' : ''}" data-a="${a.id}">${h(a.name)}</button>`).join('');
     m.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === selM));
     const an = (asg.find(a => a.id === selA) || {}).name;
-    $('#sum').innerHTML = `Guarding <b>${h(cls().name)}</b>${an ? ' / <b>' + h(an) + '</b>' : ''} · ${selM === 'block' ? 'blocking' : 'warning'} mode`;
+    $('#sum').innerHTML = `${cls().builtin ? 'Using' : 'Guarding'} <b>${h(cls().name)}</b>${an ? ' / <b>' + h(an) + '</b>' : ''} · ${selM === 'block' ? 'blocking' : 'warning'} mode`;
     m.querySelectorAll('.pick').forEach(b => b.onclick = () => { selC = b.dataset.c; paintPicks(); });
     m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
   };
