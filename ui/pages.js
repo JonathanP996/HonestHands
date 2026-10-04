@@ -24,7 +24,6 @@ function countTo(node, to, opts = {}) {
 const DAYNAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const OUTCOME = {
   clean:      { word: 'clean',      label: 'Clean',              cls: 'ok' },
-  revised:    { word: 'revised',    label: 'Revised, then sent', cls: 'fix' },
   flagged:    { word: 'flagged',    label: 'Flagged',            cls: 'some' },
   overridden: { word: 'overridden', label: 'Overridden',         cls: 'bad' },
 };
@@ -71,7 +70,7 @@ function paintInsights() {
 
     <div class="ins-bot">
       <div class="icard rise" style="--i:5"><div class="ihead"><h2>By class</h2>
-        <span class="legend"><i class="ok"></i>clean <i class="fix"></i>revised <i class="some"></i>flagged <i class="bad"></i>overridden</span></div>
+        <span class="legend"><i class="ok"></i>clean <i class="some"></i>flagged <i class="bad"></i>overridden</span></div>
         <div class="classbars" id="i-classes"></div></div>
       <div class="icard rise" style="--i:6"><div class="ihead"><h2>This week</h2><span class="icap" id="i-run"></span></div>
         <div class="week" id="i-week"></div></div>
@@ -88,7 +87,7 @@ function paintInsights() {
     countTo($('#gnum'), pct, { dur: 1400 });
     // messages card
     countTo($('#i-total'), t.total);
-    $('#i-rows').innerHTML = ['clean', 'revised', 'flagged', 'overridden'].map(k =>
+    $('#i-rows').innerHTML = ['clean', 'flagged', 'overridden'].map(k =>
       `<div class="irow"><span class="idot ${OUTCOME[k].cls}"></span><span>${OUTCOME[k].label}</span><b>${t[k]}</b></div>`).join('');
     // time card
     countTo($('#i-time'), t.seconds, { fmt: v => fmtLong(v), dur: 1300 });
@@ -128,10 +127,10 @@ function paintInsights() {
     }
     // classes
     if (!same('classes', d.classes)) {
-      $('#i-classes').innerHTML = d.classes.map((c, i) => { const sum = c.clean + c.revised + c.flagged + c.overridden, tot = sum || 1;
+      $('#i-classes').innerHTML = d.classes.map((c, i) => { const sum = c.clean + c.flagged + c.overridden, tot = sum || 1;
         const seg = (k, cls) => c[k] ? `<div class="seg ${cls}" data-w="${100 * c[k] / tot}" style="--d:${i * 100}ms" title="${c[k]} ${k}"></div>` : '';
         return `<div class="cbar"><div class="cname"><i class="cdot cc-${c.color}"></i>${h(c.name)}</div>
-          <div class="cstack">${seg('clean', 'ok')}${seg('revised', 'fix')}${seg('flagged', 'some')}${seg('overridden', 'bad')}</div>
+          <div class="cstack">${seg('clean', 'ok')}${seg('flagged', 'some')}${seg('overridden', 'bad')}</div>
           <b class="ctot">${sum}</b></div>`; }).join('')
         || '<p class="muted">Add a class and start a session to see this.</p>';
       nextFrame(() => $('#i-classes').querySelectorAll('.seg').forEach(s => s.style.width = s.dataset.w + '%'));
@@ -175,7 +174,7 @@ async function paintHistory() {
   const block = (s) => {
     const d = new Date(s.start * 1000);
     const time = d.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
-    const pills = pill(s.overridden, 'overridden') + pill(s.flagged, 'flagged') + pill(s.revised, 'revised');
+    const pills = pill(s.overridden, 'overridden') + pill(s.flagged, 'flagged');
     return `<button class="hblock cc-${s.color} ${s.live ? 'live' : ''}" data-s="${s.id}" style="--i:${Math.min(n++, 14)}">
       <div class="htop"><span class="htime">${time}</span>${s.live ? '<span class="hlive"><i></i>live</span>' : ''}</div>
       <div class="hdur">${s.live ? 'now' : fmtLong(s.seconds)}</div>
@@ -201,7 +200,7 @@ async function openSession(s) {
   const node = el(`<div class="sdetail"><div class="sd-head cc-${s.color}"><div>
       <div class="sd-class">${h(s.class)}${s.assignment ? ` <span>/ ${h(s.assignment)}</span>` : ''}</div>
       <div class="sd-when">${d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} · ${d.toLocaleString([], { hour: 'numeric', minute: '2-digit' })} · ${s.live ? 'in progress' : fmtLong(s.seconds)}</div></div>
-      <div class="sd-pills">${pill(s.clean, 'clean')}${pill(s.revised, 'revised')}${pill(s.flagged, 'flagged')}${pill(s.overridden, 'overridden')}</div></div>
+      <div class="sd-pills">${pill(s.clean, 'clean')}${pill(s.flagged, 'flagged')}${pill(s.overridden, 'overridden')}</div></div>
     <div class="sd-list" id="sd-list"><p class="muted">Loading the prompts…</p></div>
     <div class="btnrow" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="sd-close">Done</button></div></div>`);
   node.querySelector('#sd-close').onclick = closeModal;

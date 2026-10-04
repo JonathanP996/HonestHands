@@ -16,7 +16,7 @@ def _err(e):
 
 
 OVERRIDDEN = ('sent anyway', 'sent after warning')
-RESULT_LABEL = {'ok': 'CLEAN', 'ok (disclose)': 'CLEAN (AI use to disclose)', 'ok (revised)': 'REVISED, THEN SENT',
+RESULT_LABEL = {'ok': 'CLEAN', 'ok (disclose)': 'CLEAN (AI use to disclose)',
                 'warned': 'FLAGGED', 'blocked': 'FLAGGED', 'sent anyway': 'OVERRIDDEN (SENT DESPITE WARNING)',
                 'sent after warning': 'OVERRIDDEN (SENT DESPITE WARNING)'}
 
@@ -26,8 +26,6 @@ def kind_of(result):
         return 'overridden'
     if result in ('warned', 'blocked'):
         return 'flagged'
-    if result == 'ok (revised)':
-        return 'revised'
     return 'clean' if str(result).startswith('ok') else 'other'
 
 
@@ -45,10 +43,10 @@ def dedupe(msgs, window=12):
 
 
 def tally(msgs):
-    """clean / flagged (stopped) / revised (fixed, then passed) / overridden (sent despite a warning)."""
+    """clean (anything that went through fine) / flagged (stopped) / overridden (sent despite a warning)."""
     res = [kind_of(m['result']) for m in dedupe(msgs)]
     over, warned = res.count('overridden'), res.count('flagged')
-    return {'clean': res.count('clean'), 'revised': res.count('revised'), 'overridden': over,
+    return {'clean': res.count('clean'), 'overridden': over,
             'flagged': max(0, warned - over)}   # every overridden send was warned first; don't count it twice
 
 
@@ -371,7 +369,7 @@ class Api:
 
     def get_log_page(self, page=1, per_page=25, kind='all'):
         allrows = list(reversed(self._store.read_log()))
-        counts = {'all': len(allrows), 'flagged': 0, 'overridden': 0, 'revised': 0, 'clean': 0}
+        counts = {'all': len(allrows), 'flagged': 0, 'overridden': 0, 'clean': 0}
         for r in allrows:
             if 'result' in r:
                 counts[kind_of(r['result'])] = counts.get(kind_of(r['result']), 0) + 1
@@ -426,7 +424,7 @@ class Api:
         by_site, by_class = {}, {}
         for m in msgs:
             by_site[site_name(m.get('where'))] = by_site.get(site_name(m.get('where')), 0) + 1
-            c = by_class.setdefault(m.get('class') or 'Other', {'clean': 0, 'flagged': 0, 'revised': 0, 'overridden': 0})
+            c = by_class.setdefault(m.get('class') or 'Other', {'clean': 0, 'flagged': 0, 'overridden': 0})
             k = kind_of(m['result'])
             if k in c: c[k] += 1
         classes_cfg = {c['name']: c.get('color') for c in self._store.data['classes']}
@@ -450,13 +448,13 @@ class Api:
                            longest_session=max(secs) if secs else 0,
                            avg_session=int(sum(secs) / len(secs)) if secs else 0,
                            avg_ms=int(sum(ai_ms) / len(ai_ms)) if ai_ms else 0),
-            'clean_rate': round(100 * (t['clean'] + t['revised']) / total) if total else 100,
+            'clean_rate': round(100 * t['clean'] / total) if total else 100,
             'streak': {'current': cur, 'longest': longest, 'today_done': today in aset},
             'clean_run': {'current': run_now, 'best': best_run},
             'heat': heat,
             'sites': sorted(({'name': k, 'n': v} for k, v in by_site.items()), key=lambda x: -x['n'])[:6],
             'classes': sorted(({'name': k, 'color': 'ink' if k == 'Tutor mode' else (classes_cfg.get(k) or 'lav'), **v}
-                               for k, v in by_class.items()), key=lambda x: -(x['clean'] + x['flagged'] + x['revised'] + x['overridden']))[:6],
+                               for k, v in by_class.items()), key=lambda x: -(x['clean'] + x['flagged'] + x['overridden']))[:6],
             'last7': last7,
         }
 
@@ -473,7 +471,7 @@ class Api:
         lines = ['AI Integrity Guard report', f'Generated {datetime.now():%b %d %Y %I:%M %p}',
                  f'{sum(1 for e in entries if e.get("event") == "session start")} study sessions, '
                  f'{len(msgs)} AI messages: {t["clean"]} clean, {t["flagged"]} flagged (held), '
-                 f'{t["revised"]} revised then sent, {t["overridden"]} overridden (sent despite a warning)', '']
+                 f'{t["overridden"]} overridden (sent despite a warning)', '']
         for e in entries:
             when = datetime.fromtimestamp(e['t']).strftime('%b %d %I:%M %p')
             if 'event' in e:

@@ -429,13 +429,13 @@ async function paintLog() {
     if (e.event) return `<div class="logline"><span class="when">${when}</span><div class="txt muted">— ${h(e.event)}: ${h(e.class||'')} ${h(e.assignment||'')}</div></div>`;
     const over = e.result === 'sent anyway' || e.result === 'sent after warning';
     const ok = e.result.startsWith('ok'), warned = !over && !ok;
-    const label = { 'ok': 'Clean', 'ok (disclose)': 'Clean · disclose AI use', 'ok (revised)': 'Revised, then sent', 'warned': 'Flagged', 'blocked': 'Flagged', 'sent anyway': 'Overridden', 'sent after warning': 'Overridden' }[e.result] || e.result;
+    const label = { 'ok': 'Clean', 'ok (disclose)': 'Clean · disclose AI use', 'ok (revised)': 'Clean', 'warned': 'Flagged', 'blocked': 'Flagged', 'sent anyway': 'Overridden', 'sent after warning': 'Overridden' }[e.result] || e.result;
     return `<div class="logline"><span class="when">${when}</span><span class="dot ${ok?'':over?'bad':'warn'}"></span>
       <div class="txt"><b>${h(label)}</b> · ${h(e.where||'')} · ${h(e.class||'')} ${e.assignment?'/ '+h(e.assignment):''}
       ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
       <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
   }).join('');
-  const FILTERS = [['all', 'All', ''], ['flagged', 'Flagged', 'warn'], ['overridden', 'Overridden', 'bad'], ['revised', 'Revised', 'fix'], ['clean', 'Clean', 'ok']];
+  const FILTERS = [['all', 'All', ''], ['flagged', 'Flagged', 'warn'], ['overridden', 'Overridden', 'bad'], ['clean', 'Clean', 'ok']];
   $('#logfilters').innerHTML = FILTERS.map(([k, label, cls]) => `<button class="fchip ${LOGKIND === k ? 'on' : ''}" data-k="${k}">
     ${cls ? `<span class="idot ${cls}"></span>` : ''}${label}<span class="fcount">${pg.counts[k] ?? 0}</span></button>`).join('');
   $('#logfilters').querySelectorAll('.fchip').forEach(b => b.onclick = () => { LOGKIND = b.dataset.k; LOGPAGE = 1; paintLog(); });
