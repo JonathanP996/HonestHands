@@ -648,7 +648,7 @@ class Guard:
                 return True
 
             r = self.judge.cached(p['text'], cls, asg)
-            if r is None and (rules.check(p['text'], cls, asg)['hard'] or not self.judge.engine.ready()):
+            if r is None and (rules.check(p['text'], cls, asg).get('evade') or not self.judge.engine.ready()):
                 r = self.judge.check(p['text'], cls, asg, p['where'])  # no AI, instant
             if r is not None:
                 dbg('intercept: cached/instant verdict =', r.get('verdict'), 'level=', r.get('level'))

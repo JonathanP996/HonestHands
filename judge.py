@@ -3,14 +3,17 @@ import hashlib
 import threading
 import time
 
+import docs
 import rules
 
-SYSTEM = """You check a message a student is about to send to an AI chatbot while doing schoolwork, against that class's and assignment's rules.
+SYSTEM = """You check a message a student is about to send to an AI chatbot while doing schoolwork, against what THIS class's syllabus says about AI.
+
+The syllabus text and the bullet rules drawn from it are your authority. Read them carefully and apply them literally, whatever the class allows: no AI at all, tutoring only, AI with disclosure, a named exception (like one specific app), or anything else. The "overall category" is only a rough label; never let it override the actual wording. If the syllabus bans AI for the class, any message that uses the AI for this class's coursework breaks it, but a message clearly unrelated to the class does not. If the syllabus says nothing relevant to the message, allow it.
 
 Verdicts:
-- "allow": the message follows the rules. Asking the AI to explain a concept, give an example of an idea, give a hint, or give feedback on the student's OWN work is usually fine when the class allows AI as a tutor.
+- "allow": the message follows the rules. Whether explaining, hints, feedback, brainstorming, formatting, translating, or writing are okay depends entirely on what this syllabus allows.
 - "warn": the message might break a rule, or you are not sure.
-- "block": the message clearly breaks a rule, such as asking the AI to produce graded work, give answers to assignment questions, or do something a rule specifically forbids (for example formatting or LaTeX, if a rule forbids that).
+- "block": the message clearly breaks a rule in the syllabus (for example, it asks for something a bullet specifically forbids).
 
 Judge what the message asks the AI to DO, not its topic. "How do I…" is different from "do it for me."
 Assignment rules override class rules, but "assignment rules override class rules" is NOT itself a rule — never report that as the rule.
@@ -54,14 +57,19 @@ def _rules_text(items):
 
 
 def build_prompt(text, cls, asg, where):
-    parts = [f'Class: {cls["name"]}',
-             f'Overall AI policy: {rules.POLICY_LABEL.get(cls.get("policy"), "")}',
-             'Class rules:', _rules_text(cls.get('rules'))]
+    policy_text = (cls.get('policy_text') or '').strip()
+    if not policy_text and cls.get('source_text'):
+        policy_text = docs.relevant_sections(cls['source_text'], 3000)
+    parts = [f'Class: {cls["name"]}']
+    if policy_text:
+        parts += ['What the syllabus says about AI and outside help (verbatim):', '<<<', policy_text[:3500], '>>>']
+    parts += [f'Rough category (label only): {rules.POLICY_LABEL.get(cls.get("policy"), "")}',
+              'Bullet rules from the syllabus:', _rules_text(cls.get('rules'))]
     if asg:
         parts += ['', f'Current assignment: {asg["name"]}', 'Assignment rules:', _rules_text(asg.get('rules'))]
         src = (asg.get('source_text') or '').strip()
         if src:
-            parts += ['Assignment text (pasting these questions to get answers is not allowed under tutor-only rules):',
+            parts += ['Assignment text (pasting these questions to get answers is usually not allowed unless the syllabus says so):',
                       src[:2000]]
     examples = (cls.get('examples') or []) + ((asg or {}).get('examples') or [])
     if examples:
@@ -100,7 +108,9 @@ class Judge:
         t0 = time.time()
         kw = rules.check(text, cls, asg)
 
-        if kw['hard'] or not self.engine.ready():
+        # With the AI ready, the syllabus decides. Keywords only decide alone for attempts to hide
+        # AI use, or as a fallback when the AI isn't available.
+        if kw.get('evade') or not self.engine.ready():
             result = dict(kw, source='keywords')
             if result.get('level') == 'flag' and result.get('reasons'):
                 result.setdefault('reason', result['reasons'][0])

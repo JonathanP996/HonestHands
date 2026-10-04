@@ -357,7 +357,7 @@ function openDocFlow(kind, classId) {
     node.querySelector('#go').disabled = true;
     const res = await api().analyze(kind, name, path, text, classId || '', '');
     if (res.error) { node.querySelector('#hint').textContent = res.error; node.querySelector('#go').disabled = false; return; }
-    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: res.rules, examples: res.examples, source_text: res.source_text }, res);
+    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: res.rules, examples: res.examples, source_text: res.source_text, policy_text: res.policy_text, category_reason: res.category_reason }, res);
   };
   modal(node);
 }
@@ -374,10 +374,13 @@ function reviewDraft(kind, classId, draft, meta) {
   const node = el(`<div><h2>Review the rules for ${h(draft.name)}</h2>
     <p class="sub">${meta && meta.used_ai ? 'The AI read your document.' : 'Read without the AI judge (keyword search).'} Keep what's right, fix wording, or remove anything that doesn't belong. Every rule shows the line it came from.</p>
     ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
-    ${isClass ? `<div class="field"><label>Overall AI policy</label><select id="pol">
-      ${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select></div>` : ''}
-    <label>Rules</label><div id="rules">${draft.rules.map(ruleRow).join('') || '<p class="small muted">No rules found. Add any that matter below.</p>'}</div>
+    ${isClass ? `<div class="field"><label>What the syllabus says about AI <span class="muted">— the judge reads this for every message</span></label>
+      <textarea id="ptext" rows="5" placeholder="Paste or edit the AI / collaboration part of the syllabus">${h(draft.policy_text || '')}</textarea></div>` : ''}
+    <label>${isClass ? 'What the judge will enforce' : 'Rules'}</label><div id="rules">${draft.rules.map(ruleRow).join('') || '<p class="small muted">No rules found. Add any that matter below.</p>'}</div>
     <button class="btn ghost sm mt" id="addrule">+ Add a rule</button>
+    ${isClass ? `<div class="mt catline"><span class="muted small">Rough category (just a label):</span>
+      <select id="pol" class="mini">${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select>
+      ${draft.category_reason ? `<span class="small muted">${h(draft.category_reason)}</span>` : ''}</div>` : ''}
     <div class="mt"><label>Example checks (help the AI judge)</label>
       <div class="small muted">${(draft.examples||[]).map(e=>`“${h(e.prompt)}” → <span class="tag ${e.verdict}">${e.verdict}</span>`).join('<br>') || 'none'}</div></div>
     <div class="btnrow mt" style="justify-content:flex-end"><button class="btn ghost" id="cx">Cancel</button>
@@ -394,7 +397,7 @@ function reviewDraft(kind, classId, draft, meta) {
   node.querySelector('#cx').onclick = closeModal;
   node.querySelector('#save').onclick = async () => {
     const payload = { id: draft.id, name: draft.name, rules: rules.filter(r => r.rule.trim()), examples: draft.examples, source_text: draft.source_text };
-    if (isClass) payload.policy = node.querySelector('#pol').value;
+    if (isClass) { payload.policy = node.querySelector('#pol').value; payload.policy_text = node.querySelector('#ptext').value; payload.category_reason = draft.category_reason || ''; }
     const r = isClass ? await api().save_class(payload) : await api().save_assignment(classId, payload);
     if (r.error) { toast(r.error); return; } closeModal(); toast('Saved.'); S = r; paint();
   };
@@ -403,7 +406,7 @@ function reviewDraft(kind, classId, draft, meta) {
 
 async function editClass(id) {
   const c = S.classes.find(x => x.id === id);
-  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '' }, null);
+  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '', policy_text: c.policy_text || '', category_reason: c.category_reason || '' }, null);
 }
 
 // ---- Activity log ----

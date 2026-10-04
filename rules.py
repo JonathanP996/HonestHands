@@ -51,9 +51,10 @@ def _overlap(prompt, desc):
 def check(prompt, cls, asg=None):
     """Returns {'level': 'ok'|'note'|'flag', 'hard': bool, 'reasons': [...], 'tip': str}"""
     reasons, flagged, hard = [], False, False
+    evade = _any(EVADE, prompt)
     policy = cls.get('policy', 'tutor')
 
-    if _any(EVADE, prompt):
+    if evade:
         flagged = hard = True
         reasons.append('This looks like an attempt to hide AI use or get past a detector. That is blocked under every policy.')
 
@@ -76,10 +77,10 @@ def check(prompt, cls, asg=None):
             reasons.append("That's a big paste with no question about understanding it. Make sure you're asking for feedback, not for the AI to do the work.")
 
     if flagged:
-        return {'level': 'flag', 'hard': hard, 'reasons': reasons, 'tip': TIPS.get(policy, TIPS['tutor'])}
+        return {'level': 'flag', 'hard': hard, 'evade': evade, 'reasons': reasons, 'tip': TIPS.get(policy, TIPS['tutor'])}
     if policy == 'open' and (_any(GENERATE, prompt) or _any(REWRITE, prompt)):
-        return {'level': 'note', 'hard': False, 'reasons': ['AI is allowed in this class. Remember to disclose how you used it.'], 'tip': ''}
-    return {'level': 'ok', 'hard': False, 'reasons': [], 'tip': ''}
+        return {'level': 'note', 'hard': False, 'evade': False, 'reasons': ['AI is allowed in this class. Remember to disclose how you used it.'], 'tip': ''}
+    return {'level': 'ok', 'hard': False, 'evade': False, 'reasons': [], 'tip': ''}
 
 
 AI_MENTION = re.compile(r'\b(AI|A\.I\.|ChatGPT|generative|artificial intelligence|chatbots?|large language models?|LLMs?|Claude|Gemini|Copilot)\b', I)

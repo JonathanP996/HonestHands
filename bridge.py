@@ -199,7 +199,9 @@ class Api:
             c = {'id': new_id(), 'assignments': []}
             self._store.data['classes'].append(c)
         c.update({'name': name, 'policy': draft.get('policy') or 'tutor',
-                  'rules': self._clean_rules(draft.get('rules')), 'examples': self._clean_examples(draft.get('examples'))})
+                  'rules': self._clean_rules(draft.get('rules')), 'examples': self._clean_examples(draft.get('examples')),
+                  'policy_text': str(draft.get('policy_text', '')).strip()[:4000],
+                  'category_reason': str(draft.get('category_reason', '')).strip()})
         if draft.get('source_text'):
             c['source_text'] = draft['source_text']
         self._store.save()
