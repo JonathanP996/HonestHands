@@ -410,23 +410,29 @@ class App:
         except Exception:
             return False
 
-    def extension_check(self, text, site, url):
+    def extension_check(self, text, site, url, images=None, n_images=0):
         '''Check a message the extension intercepted. Returns a verdict dict and logs it.
         Mirrors the Accessibility path so rules/log stay unified.'''
         cls, asg = self.store.session_targets()
         if cls is None:
             return {'verdict': 'allow'}
         text = (text or '').strip()
-        if not text:
+        images = [i for i in (images or []) if isinstance(i, str)][:3]
+        has_pic = bool(images) or n_images > 0
+        if not text and not has_pic:
             return {'verdict': 'allow'}
         where = site or 'browser'
         hook = getattr(self, 'native_overlay', None)
-        if hook is not None and not self.ai_guard.cached(text, cls, asg):
+        if hook is not None and (has_pic or not self.ai_guard.cached(text, cls, asg)):
             AppHelper.callAfter(hook.checking)
         sa = getattr(self.guard, 'sent_anyway', None)
         if sa and sa[0].strip() == text and time.time() < sa[1]:
             return {'verdict': 'allow'}
-        r = self.ai_guard.check(text, cls, asg, where, timeout=12)
+        if has_pic:
+            r = self.ai_guard.check_with_images(text, images, cls, asg, where, timeout=15, n_images=n_images)
+            text = (text + ' ' if text else '') + f'[+{max(len(images), n_images)} picture{"s" if max(len(images), n_images) != 1 else ""}]'
+        else:
+            r = self.ai_guard.check(text, cls, asg, where, timeout=12)
         # Map to the extension's simple contract + details for the warning panel.
         verdict = r.get('verdict', 'allow')
         hard = self.guard.is_hard(r) if r.get('level') == 'flag' else False

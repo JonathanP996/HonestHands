@@ -55,7 +55,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send({'active': False, 'verdict': 'allow'})
             return
         try:
-            result = app.extension_check(data.get('text', ''), data.get('site', ''), data.get('url', ''))
+            result = app.extension_check(data.get('text', ''), data.get('site', ''), data.get('url', ''),
+                                         data.get('images') or [], int(data.get('nImages') or 0))
             result['active'] = True
             self._send(result)
         except Exception as e:

@@ -18,11 +18,11 @@ async function appStatus() {
   }
 }
 
-async function appCheck(text, site, url) {
+async function appCheck(text, site, url, images, nImages) {
   try {
     const r = await fetch(APP + '/check', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, site, url })
+      body: JSON.stringify({ text, site, url, images: images || [], nImages: nImages || 0 })
     });
     return await r.json();
   } catch (e) {
@@ -32,7 +32,7 @@ async function appCheck(text, site, url) {
 
 // Content scripts talk to the app through here (page CSP can't block this path).
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'check')  { appCheck(msg.text, msg.site, msg.url).then(sendResponse); return true; }
+  if (msg.type === 'check')  { appCheck(msg.text, msg.site, msg.url, msg.images, msg.nImages).then(sendResponse); return true; }
   // 'status'/'ping' both just report presence + session state.
   appStatus().then(sendResponse);
   return true;

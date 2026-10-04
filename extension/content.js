@@ -76,8 +76,55 @@
     if (r && !r.reachable) log('app not reachable (is HonestHands running?)');
     return active;
   }
-  async function askApp(text) {
-    const r = await send({ type: 'check', text, site: HOST, url: location.href });
+  // --- pictures the student attaches: the guard reads them (on the Mac) so "do this" + a screenshot can't slip through ---
+  const pendingFiles = [];                       // image Files seen via paste / drag-drop / file picker (a backup if the preview can't be read)
+  const isImg = (f) => f && /^image\//.test(f.type || '');
+  const remember = (files) => { for (const f of files || []) if (isImg(f) && !pendingFiles.includes(f)) pendingFiles.push(f); if (pendingFiles.length > 6) pendingFiles.splice(0, pendingFiles.length - 6); };
+  window.addEventListener('paste', (e) => remember(Array.from((e.clipboardData && e.clipboardData.files) || [])), true);
+  window.addEventListener('drop', (e) => remember(Array.from((e.dataTransfer && e.dataTransfer.files) || [])), true);
+  window.addEventListener('change', (e) => { if (e.target && e.target.type === 'file') remember(Array.from(e.target.files || [])); }, true);
+
+  function composerEl() { return document.querySelector(profile.input); }
+  // thumbnails sitting at the message box right now (a picture the student removed, or one up in the chat history, doesn't count)
+  function attachedImgs() {
+    const el = composerEl();
+    if (!el) return [];
+    let root = el.closest('form');
+    if (!root) { root = el; for (let i = 0; i < 8 && root.parentElement && root.parentElement !== document.body; i++) root = root.parentElement; }
+    const cr = el.getBoundingClientRect();
+    return Array.from(root.querySelectorAll('img')).filter((i) => {
+      const w = i.naturalWidth || i.width || 0, h = i.naturalHeight || i.height || 0;
+      if (w < 48 || h < 48 || i.closest('button, [role="button"], nav, header')) return false;
+      const r = i.getBoundingClientRect();
+      return r.bottom >= cr.top - 280 && r.top <= cr.bottom + 60 && r.right >= cr.left - 60 && r.left <= cr.right + 60;
+    });
+  }
+  const readAsDataURL = (blob) => new Promise((res) => { try { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(blob); } catch (e) { res(null); } });
+  async function shrink(blob) {                   // keep text readable but the upload small
+    try {
+      if (typeof createImageBitmap === 'function') {
+        const bmp = await createImageBitmap(blob);
+        const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+        const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+        cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+        return cv.toDataURL('image/jpeg', 0.88);
+      }
+    } catch (e) { /* fall through to the raw file */ }
+    return readAsDataURL(blob);
+  }
+  async function collectImages() {
+    const imgs = attachedImgs();
+    if (!imgs.length) { pendingFiles.length = 0; return { n: 0, data: [] }; }
+    const data = [];
+    for (const img of imgs.slice(0, 3)) {
+      try { const b = await (await fetch(img.currentSrc || img.src)).blob(); const d = await shrink(b); if (d) data.push(d); } catch (e) { /* cross-origin preview */ }
+    }
+    if (!data.length) for (const f of pendingFiles.slice(-3)) { const d = await shrink(f); if (d) data.push(d); }
+    return { n: imgs.length, data };
+  }
+
+  async function askApp(text, imgs) {
+    const r = await send({ type: 'check', text, site: HOST, url: location.href, images: (imgs && imgs.data) || [], nImages: (imgs && imgs.n) || 0 });
     return r || { active: false, verdict: 'allow' };
   }
 
@@ -108,16 +155,18 @@
     if (!active) { log('inactive -> replaying send (no interference)'); replaySend(e, isEnter); return; }
 
     const text = readComposer();
-    log('composer text =', JSON.stringify(text).slice(0, 80));
-    if (!text) { log('no text -> replaying send'); replaySend(e, isEnter); return; }
+    const imgs = await collectImages();
+    log('composer text =', JSON.stringify(text).slice(0, 80), '| pictures =', imgs.n);
+    if (!text && !imgs.n) { log('no text, no picture -> replaying send'); replaySend(e, isEnter); return; }
 
     busy = true;
-    const verdict = await askApp(text);
+    const verdict = await askApp(text, imgs);
     busy = false;
     log('verdict =', verdict);
 
     if (!verdict || verdict.active === false || verdict.verdict === 'allow') {
       log('allowed -> replaying send');
+      pendingFiles.length = 0;
       replaySend(e, isEnter);
     } else {
       log('BLOCKED/WARNED -> not sending');

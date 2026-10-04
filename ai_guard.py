@@ -7,6 +7,7 @@ import time
 import distill
 import docs
 import homework
+import ocr
 import rules
 from engine import parse_json as engine_parse
 
@@ -33,7 +34,7 @@ Reply with JSON only, in exactly this order:
 
 EXTRACT_SYSTEM = """You read a course's AI policy and turn it into two short checklists.
 
-1. "forbidden": the kinds of REQUESTS a student is not allowed to make to an AI chatbot under this policy. One item per distinct restriction. Write each item as an action starting with a verb, for example "ask the AI to solve a homework question", "use AI to fix or format LaTeX in your own answer", "share the question or your answer with the AI". Include the policy's own restrictions about formatting, writing, rewriting, sharing questions or work, and getting answers or solutions, whenever the policy states them. For each item give "quote": the exact words from the policy that forbid it (at most 25 words, copied exactly).
+1. "forbidden": the kinds of REQUESTS a student is not allowed to make to an AI chatbot under this policy. One item per distinct restriction. Write each item as an action starting with a verb, for example "ask the AI to solve a homework question", "use AI to fix or format LaTeX in your own answer", "share the assignment question, or your own answer or work, with the AI (even just to check or fix it)". Include the policy's own restrictions about formatting, writing, rewriting, sharing questions or work, and getting answers or solutions, whenever the policy states them. For each item give "quote": the exact words from the policy that forbid it (at most 25 words, copied exactly).
 2. "allowed": the kinds of requests the policy explicitly allows, as short actions (for example "ask about topics and formulae", "ask what a LaTeX command does").
 
 Never list something as forbidden if the policy says it IS allowed or fine (for example, a policy may allow copying your own work into your own conversation, or asking general questions). Only include what the policy actually says. At most 8 forbidden and 5 allowed items.
@@ -42,6 +43,13 @@ Reply with JSON only: {"forbidden":[{"item":"...","quote":"..."}],"allowed":["..
 CLASSIFY_SYSTEM = """You screen one message a student is about to send to an AI chatbot, for one course. Below is a numbered list of requests this course's AI policy FORBIDS, and a list of requests it ALLOWS.
 
 Decide whether the message asks the AI for any forbidden request. Match on what the student wants the AI to DO, not on the topic, and ignore typos and slang. Asking to understand an idea, a formula or a command in general terms is not the same as asking the AI to work on the student's own answer or assignment problem. Pasting or describing the student's own answer, work, or an assignment question in the message counts as sharing it. Only match an item if the message really asks for it. If it matches none, answer 0.
+
+How to match, with unrelated examples (a cooking class whose forbidden list is: 1. ask the AI to write your recipe for you  2. share your own dish description with the AI  3. use AI to translate your recipe card):
+- "make up a recipe for lemon bars for my assignment" -> {"match": 1, "suggestion": "Ask what makes lemon bars set, then write the recipe yourself."}
+- "here's my dish, is the plating okay?" -> {"match": 2, "suggestion": "Ask a general question about plating, without describing your dish."}
+- "put my recipe card into Spanish" -> {"match": 3, "suggestion": "Ask what a Spanish cooking term means."}
+- "why does bread need to rise?" -> {"match": 0, "suggestion": ""}
+A reworded or shortened request still matches: what counts is the action the student wants done, not the exact words.
 
 Reply with JSON only: {"match": <number of the forbidden item, or 0>, "suggestion": "<at most 15 words the student could ask instead, or empty if match is 0>"}"""
 
@@ -60,6 +68,8 @@ Answer copies=false if the message only asks what something means, how an idea o
 Reply with JSON only: {"copies": true|false, "which": "<letter of the question, or empty>"}"""
 
 HW_ITEM = re.compile(r"\b(question|problem|solve|answer|solution|homework|assignment|share)\w*", re.I)
+
+PERMISSION = re.compile(r"^\W*(?:you|students?)\s+(?:can|may|are welcome to|are free to)\s+(?!not\b|never\b)|^\W*feel free|^\W*it is (?:fine|okay|ok|appropriate) to", re.I)
 
 BAN_HINT = re.compile(r"\b(not (be )?(permitted|allowed)|prohibit\w*|forbid\w*|may not|must not|cannot|never|dishonest\w*)\b", re.I)
 
@@ -314,6 +324,7 @@ class AIGuard:
             if not isinstance(it, dict):
                 continue
             item, quote = str(it.get('item', '')).strip(), str(it.get('quote', '')).strip()
+            item = re.sub(r'\s*\bverbatim\b', '', item)                  # sharing counts even when it isn't word for word
             if item:
                 forbidden.append({'item': item, 'quote': quote if quote and distill.quote_is_real(quote, src) else ''})
         allowed = [str(a).strip() for a in (data.get('allowed') or [])[:6] if str(a).strip()]
@@ -330,7 +341,7 @@ class AIGuard:
             except Exception:
                 pass
             kept.append(f)
-        forbidden = kept
+        forbidden = [f for f in kept if not (f['quote'] and PERMISSION.search(f['quote']))]   # "You can copy your own work…" is a permission
         if not forbidden and BAN_HINT.search(cp + ' ' + ap):
             return None            # the policy clearly forbids something but we found nothing: don't trust an empty list
         print(f'[guard] checklist for {cls["name"]}{" / " + asg["name"] if asg else ""}: '
@@ -436,6 +447,48 @@ class AIGuard:
             except Exception as e:
                 print('[guard] warm-up skipped:', e, flush=True)
         threading.Thread(target=run, daemon=True).start()
+
+    def check_with_images(self, text, images, cls, asg, where='', timeout=12, n_images=0, use_cache=True):
+        """Like check(), for a message with pictures attached. The pictures are read on this Mac (Apple Vision) and treated as
+        typed text, so "do this" + a screenshot of a homework question is judged by what the screenshot says."""
+        t0 = time.time()
+        text = (text or '').strip()
+        n = max(len(images or []), n_images or 0)
+        read = [ocr.read_text(i) for i in (images or [])[:3]]
+        blob = '\n'.join(t for t in read if t).strip()
+
+        def tag(r):
+            r = dict(r)
+            r['picture'] = True
+            r['ms'] = int((time.time() - t0) * 1000)
+            if r.get('verdict') != 'allow' and r.get('reason'):
+                rs = r['reason']
+                if rs.startswith('This looks like it comes from'):
+                    r['reason'] = 'The picture you attached ' + rs[len('This '):]
+                elif text and len(text) > 12:
+                    r['reason'] = 'With the picture you attached, ' + rs[:1].lower() + rs[1:]
+                elif rs.startswith('This '):
+                    r['reason'] = 'The picture you attached ' + rs[len('This '):]
+                r['reasons'] = [r['reason']] + [x for x in (r.get('reasons') or [])[1:]]
+            return r
+
+        if len(blob) >= 20:                                            # readable: judge it like typed text
+            combined = (text + '\n\n' if text else '') + '[Text read from the attached picture]\n' + blob
+            return tag(self.check(combined, cls, asg, where, timeout=timeout, use_cache=use_cache))
+        # a picture with no readable text (a photo, handwriting, a diagram): we can't see what it holds
+        base = self.check(text, cls, asg, where, timeout=timeout, use_cache=use_cache) if text else None
+        items = self.items_for(cls, asg, wait=min(timeout, 12))
+        gate = [f for f in (items or {}).get('forbidden', []) if HW_ITEM.search(f['item'])]
+        if base and base.get('verdict') != 'allow' and (len(text) > 12 or not gate):
+            return tag(base)                              # the typed message is a problem on its own
+        if gate:
+            reason = ("You attached a picture the guard can't read. This policy doesn't allow sharing assignment questions or your work "
+                      "with an AI, and a picture is an easy way around that.")
+            res = {'level': 'flag', 'hard': False, 'reason': reason, 'rule': "Don't share assignment questions or your work with the AI",
+                   'quote': gate[0]['quote'], 'tip': 'Type your own question about the idea, without attaching the assignment or your answer.',
+                   'verdict': 'warn', 'source': 'ai', 'reasons': [reason]}
+            return tag(res)
+        return tag(base or {'level': 'ok', 'hard': False, 'reasons': [], 'tip': '', 'verdict': 'allow', 'source': 'ai'})
 
     def preguard(self, text, cls, asg, where):
         """Checks a draft in the background while you type, so sending feels instant."""
