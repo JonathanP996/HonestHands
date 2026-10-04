@@ -1,4 +1,4 @@
-"""The judge: checks a message against a class's AI policy.
+"""The guard: checks a message against a class's AI policy.
 Same rules as the browser extension, ported to Python. Runs 100% locally."""
 import re
 

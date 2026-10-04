@@ -1,4 +1,4 @@
-"""The AI that does the judging. Three choices:
+"""The AI that does the guarding. Three choices:
   builtin  - runs a small model INSIDE this app with llama-cpp-python (default)
   ollama   - uses Ollama if you already have it
   keywords - no AI, keyword rules only
@@ -124,7 +124,7 @@ class Engine:
             if not llama_available():
                 self._set('needs_setup', 'The built-in AI runtime isn\'t available in this copy. Use Ollama, or keyword rules.')
             else:
-                self._set('needs_setup', 'The AI judge needs a one-time model download. Set it up in Settings.')
+                self._set('needs_setup', 'The AI guard needs a one-time model download. Set it up in Settings.')
         else:
             self.start()
 
@@ -164,7 +164,7 @@ class Engine:
             self._download_model(gen)
         if gen != self._gen:
             return
-        self._set('starting', 'Loading the AI judge…')
+        self._set('starting', 'Loading the AI guard…')
         from llama_cpp import Llama
         llama = Llama(
             model_path=str(self.model_path()),
@@ -175,7 +175,7 @@ class Engine:
         if gen != self._gen:
             return
         self.llama = llama
-        self._set('ready', 'AI judge is ready.')
+        self._set('ready', 'AI guard is ready.')
 
     def _download(self, url, dest, label, gen):
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +201,7 @@ class Engine:
 
     def _finish_chosen_download(self):
         """Keeps downloading the model chosen in Settings (resuming a partial file) while the
-        installed one does the judging, then switches over when it's complete."""
+        installed one does the guarding, then switches over when it's complete."""
         chosen = MODELS.get(self.cfg.get('model'))
         if not chosen or self._dl_bg:
             return
@@ -246,14 +246,14 @@ class Engine:
                     if msg.get('total'):
                         self.progress = {'label': name, 'done': msg.get('completed', 0), 'total': msg['total']}
         self.chat_json('Reply with the JSON {"ok": true}.', 'ping', timeout=180, max_tokens=10)
-        self._set('ready', f'AI judge is ready (Ollama, {name}).')
+        self._set('ready', f'AI guard is ready (Ollama, {name}).')
 
     # ---------- asking the model ----------
     def chat_raw(self, system, user, timeout=20, max_tokens=200):
         """Returns the model's raw text. Gives up (rather than queueing forever) if another call hogs the model."""
         msgs = [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]
         if not self._call_lock.acquire(timeout=max(1, timeout)):
-            raise TimeoutError('the AI judge was busy')
+            raise TimeoutError('the AI guard was busy')
         try:
             if self.cfg['backend'] == 'ollama':
                 r = http_json(f'{OLLAMA}/api/chat', {
@@ -263,7 +263,7 @@ class Engine:
                 }, timeout=timeout)
                 return r['message']['content']
             if self.llama is None:
-                raise RuntimeError('the AI judge is not loaded')
+                raise RuntimeError('the AI guard is not loaded')
             out = self.llama.create_chat_completion(messages=msgs, temperature=0, max_tokens=max_tokens)  # no JSON grammar: it can abort llama.cpp
             return out['choices'][0]['message']['content']
         finally:

@@ -47,7 +47,7 @@ def ensure_single_instance():
     except OSError:
         return False  # another instance holds the lock
 from engine import Engine
-from judge import Judge
+from ai_guard import AIGuard
 from store import Store
 
 
@@ -87,8 +87,8 @@ class App:
             self.store.save()
             print('Accountability PIN cleared (HH_RESET_PIN=1).')
         self.engine = Engine(self.store)
-        self.judge = Judge(self.store, self.engine)
-        self.guard = watcher.Guard(self.store, self.judge)
+        self.ai_guard = AIGuard(self.store, self.engine)
+        self.guard = watcher.Guard(self.store, self.ai_guard)
         self.api = Api(self)
         self.window = None
         self.status_item = None
@@ -226,7 +226,7 @@ class App:
                 if self.engine.ready():
                     c, a = self.store.session_targets()
                     if c:
-                        self.judge.warm(c, a)
+                        self.ai_guard.warm(c, a)
                     return
                 _t.sleep(0.5)
         threading.Thread(target=_warm_when_ready, daemon=True).start()
@@ -323,7 +323,7 @@ class App:
                 'hard': bool(hard), 'title': 'Message blocked' if hard else 'Hold on a second',
                 'context': cls['name'] + (f' / {asg["name"]}' if asg else '') + ' · ' + p.get('where', ''),
                 'reason': reason, 'rule': r.get('rule', ''), 'quote': r.get('quote', ''), 'tip': r.get('tip', ''),
-                'source': 'AI judge' if r.get('source') == 'ai' else 'keyword rules',
+                'source': 'AI guard' if r.get('source') == 'ai' else 'keyword rules',
                 'allowSend': not hard,
             }
             def on_choice(choice, _p=p, _g=guard, _cls=cls, _asg=asg):
@@ -335,7 +335,7 @@ class App:
             'hard': bool(hard),
             'reason': r.get('reason') or (r.get('reasons') or ['This looks like it breaks a rule for this class.'])[0],
             'rule': r.get('rule', ''), 'quote': r.get('quote', ''), 'tip': r.get('tip', ''),
-            'where': p.get('where', ''), 'source': 'AI judge' if r.get('source') == 'ai' else 'keyword rules',
+            'where': p.get('where', ''), 'source': 'AI guard' if r.get('source') == 'ai' else 'keyword rules',
             'class': cls['name'], 'assignment': asg['name'] if asg else '',
         }
         if not getattr(self, '_overlay_ready', False):
@@ -368,7 +368,7 @@ class App:
             'hard': bool(hard),
             'reason': r.get('reason') or (r.get('reasons') or ['This looks like it breaks a rule for this class.'])[0],
             'rule': r.get('rule', ''), 'quote': r.get('quote', ''), 'tip': r.get('tip', ''),
-            'where': p.get('where', ''), 'source': 'AI judge' if r.get('source') == 'ai' else 'keyword rules',
+            'where': p.get('where', ''), 'source': 'AI guard' if r.get('source') == 'ai' else 'keyword rules',
             'class': cls['name'], 'assignment': asg['name'] if asg else '',
         }
         # Bring the app to the front (this is a normal activation — easy and reliable).
@@ -405,7 +405,7 @@ class App:
             return False
 
     def extension_check(self, text, site, url):
-        '''Judge a message the extension intercepted. Returns a verdict dict and logs it.
+        '''Check a message the extension intercepted. Returns a verdict dict and logs it.
         Mirrors the Accessibility path so rules/log stay unified.'''
         cls, asg = self.store.session_targets()
         if cls is None:
@@ -415,12 +415,12 @@ class App:
             return {'verdict': 'allow'}
         where = site or 'browser'
         hook = getattr(self, 'native_overlay', None)
-        if hook is not None and not self.judge.cached(text, cls, asg):
+        if hook is not None and not self.ai_guard.cached(text, cls, asg):
             AppHelper.callAfter(hook.checking)
         sa = getattr(self.guard, 'sent_anyway', None)
         if sa and sa[0].strip() == text and time.time() < sa[1]:
             return {'verdict': 'allow'}
-        r = self.judge.check(text, cls, asg, where, timeout=12)
+        r = self.ai_guard.check(text, cls, asg, where, timeout=12)
         # Map to the extension's simple contract + details for the warning panel.
         verdict = r.get('verdict', 'allow')
         hard = self.guard.is_hard(r) if r.get('level') == 'flag' else False

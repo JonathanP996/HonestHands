@@ -93,7 +93,7 @@ function paintInsights() {
     $('#i-trows').innerHTML = `<div class="irow"><span>Study sessions</span><b>${t.sessions}</b></div>
       <div class="irow"><span>Average session</span><b>${fmtLong(t.avg_session)}</b></div>
       <div class="irow"><span>Longest session</span><b>${fmtLong(t.longest_session)}</b></div>
-      <div class="irow"><span>Judge speed</span><b>${t.avg_ms ? (t.avg_ms / 1000).toFixed(1) + 's' : '–'}</b></div>`;
+      <div class="irow"><span>Guard speed</span><b>${t.avg_ms ? (t.avg_ms / 1000).toFixed(1) + 's' : '–'}</b></div>`;
     // sites
     if (!same('sites', d.sites)) {
       const tot = d.sites.reduce((a, s) => a + s.n, 0) || 1;

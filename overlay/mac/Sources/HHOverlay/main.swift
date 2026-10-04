@@ -176,7 +176,7 @@ struct CardView: View {
                                 }
                                 .modifier(reveal(4))
                             }
-                            Text("Checked by the \(m.cmd.source ?? "judge")").font(.system(size: 10.5))
+                            Text("Checked by the \(m.cmd.source ?? "guard")").font(.system(size: 10.5))
                                 .foregroundStyle(.tertiary).modifier(reveal(5))
 
                             VStack(spacing: 8) {

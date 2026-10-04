@@ -124,7 +124,7 @@ class Api:
         self._store.log({'t': time.time(), 'event': 'session start', 'class': c['name'],
                          'assignment': a['name'] if a else '', 'mode': self._store.data['mode']})
         self._app.refresh_menu()
-        self._app.judge.warm(c, a)
+        self._app.ai_guard.warm(c, a)
         return self.state()
 
     def end_session(self, pin=''):
@@ -258,7 +258,7 @@ class Api:
         if draft.get('source_text'):
             c['source_text'] = draft['source_text']
         self._store.save()
-        self._app.judge.forget()
+        self._app.ai_guard.forget()
         self._app.refresh_menu()
         return self.state()
 
@@ -277,7 +277,7 @@ class Api:
         if draft.get('source_text'):
             a['source_text'] = draft['source_text']
         self._store.save()
-        self._app.judge.forget()
+        self._app.ai_guard.forget()
         return self.state()
 
     def delete_class(self, class_id, pin=''):
@@ -319,19 +319,19 @@ class Api:
                 out.append({'prompt': p, 'verdict': v, 'why': str(e.get('why', '')).strip()})
         return out
 
-    # ---------- testing the judge ----------
+    # ---------- testing the guard ----------
     def test_message(self, class_id, assignment_id, text):
         c = self._store.cls(class_id)
         if not c or not (text or '').strip():
             return _err('Pick a class and type a message.')
         a = self._store.asg(c, assignment_id)
-        return self._app.judge.check(text.strip(), c, a, 'Try it page', timeout=30, use_cache=False)
+        return self._app.ai_guard.check(text.strip(), c, a, 'Try it page', timeout=30, use_cache=False)
 
     def accuracy_test(self, class_id, assignment_id):
         c = self._store.cls(class_id)
         if not c:
             return _err('Pick a class first.')
-        return self._app.judge.accuracy_test(c, self._store.asg(c, assignment_id))
+        return self._app.ai_guard.accuracy_test(c, self._store.asg(c, assignment_id))
 
     # ---------- sessions (study history) ----------
     def sessions(self, limit=100):
@@ -500,7 +500,7 @@ class Api:
         if ollama_model:
             cfg['ollama_model'] = ollama_model.strip()
         self._store.save()
-        self._app.judge.forget()
+        self._app.ai_guard.forget()
         self._app.engine.override = None
         self._app.engine.start()
         return self.state()

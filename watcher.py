@@ -1,5 +1,5 @@
 """Watches AI apps and sites: reads your prompt through Accessibility and holds the
-Enter key or send-button click until the judge has checked it."""
+Enter key or send-button click until the guard has checked it."""
 import re
 import subprocess
 import time
@@ -177,7 +177,7 @@ def app_info(app):
 
 def is_ai_app(bid, name):
     if bid in BROWSERS:
-        return False  # browsers are judged by the website instead
+        return False  # browsers are guarded by the website instead
     hay = f'{bid} {name}'.lower()
     return any(k in hay for k in AI_APP_KEYWORDS)
 
@@ -525,8 +525,8 @@ MARK = 0x41494721  # tags the Enter/click we re-send ourselves, so we don't chec
 
 
 class Guard:
-    def __init__(self, store, judge):
-        self.store, self.judge = store, judge
+    def __init__(self, store, ai_guard):
+        self.store, self.ai_guard = store, ai_guard
         self.tap = None
         self.bypass_until = 0
         self.bypass_pid = None
@@ -582,12 +582,12 @@ class Guard:
                     if not p or len(p['text']) < 3:
                         last_text = None
                         continue
-                    if not self.judge.engine.ready():
+                    if not self.ai_guard.engine.ready():
                         continue  # cache is kept fresh above; AI pre-check needs the engine
                     if p['text'] != last_text:
                         last_text, since = p['text'], time.time()
                     elif time.time() - since >= 0.8:
-                        self.judge.prejudge(p['text'], cls, asg, p['where'])
+                        self.ai_guard.preguard(p['text'], cls, asg, p['where'])
                 except Exception:
                     pass
         threading.Thread(target=loop, daemon=True).start()
@@ -666,17 +666,17 @@ class Guard:
                 self._release()
                 return True
 
-            r = self.judge.cached(p['text'], cls, asg)
-            if r is None and (rules.check(p['text'], cls, asg).get('evade') or not self.judge.engine.ready()):
-                r = self.judge.check(p['text'], cls, asg, p['where'])  # no AI, instant
+            r = self.ai_guard.cached(p['text'], cls, asg)
+            if r is None and (rules.check(p['text'], cls, asg).get('evade') or not self.ai_guard.engine.ready()):
+                r = self.ai_guard.check(p['text'], cls, asg, p['where'])  # no AI, instant
             if r is not None:
                 dbg('intercept: cached/instant verdict =', r.get('verdict'), 'level=', r.get('level'))
                 return self.act(r, p, cls, asg, trigger)  # releases on allow; stays locked on flag
-            dbg('intercept: no cached verdict -> async AI judge, HOLDING')
+            dbg('intercept: no cached verdict -> async AI guard, HOLDING')
             self._show_checking()
 
-            # Need the AI. Stay locked, judge in the background, decide in _finish.
-            threading.Thread(target=self._judge_then_send, args=(p, cls, asg, trigger, loc), daemon=True).start()
+            # Need the AI. Stay locked, guard in the background, decide in _finish.
+            threading.Thread(target=self._guard_then_send, args=(p, cls, asg, trigger, loc), daemon=True).start()
             return False
         except Exception as e:
             print(f'guard error, letting it through: {e}')
@@ -691,12 +691,12 @@ class Guard:
             except RuntimeError:
                 pass
 
-    def _judge_then_send(self, p, cls, asg, trigger, loc):
+    def _guard_then_send(self, p, cls, asg, trigger, loc):
         try:
-            r = self.judge.check(p['text'], cls, asg, p['where'], timeout=10)
-            dbg('async judge done: verdict=', r.get('verdict'), 'level=', r.get('level'), 'source=', r.get('source'))
+            r = self.ai_guard.check(p['text'], cls, asg, p['where'], timeout=10)
+            dbg('async guard done: verdict=', r.get('verdict'), 'level=', r.get('level'), 'source=', r.get('source'))
         except Exception as e:
-            dbg('async judge ERROR:', e, '-> defaulting')
+            dbg('async guard ERROR:', e, '-> defaulting')
             r = dict(rules.check(p['text'], cls, asg), source='keywords', note=str(e))
             r['verdict'] = 'allow' if r['level'] != 'flag' else 'warn'
         AppHelper.callAfter(self._finish, r, p, cls, asg, trigger, loc)
@@ -710,7 +710,7 @@ class Guard:
                 pass
 
     def _finish(self, r, p, cls, asg, trigger, loc):
-        dbg(f'timing: click/enter -> verdict {int((time.time() - getattr(self, "_t_start", time.time())) * 1000)} ms total (judge {r.get("ms")} ms)')
+        dbg(f'timing: click/enter -> verdict {int((time.time() - getattr(self, "_t_start", time.time())) * 1000)} ms total (guard {r.get("ms")} ms)')
         dbg('_finish: level=', r['level'], 'verdict=', r.get('verdict'))
         if r['level'] in ('ok', 'note') and Guard.overlay_hook is not None:
             Guard.overlay_hook.ok()
@@ -1045,7 +1045,7 @@ class HHPanel:
             lines.append(('quote', '\u201c' + r['quote'] + '\u201d'))
         if r.get('tip'):
             lines.append(('tip', 'Try instead: ' + r['tip']))
-        foot = ('Checked by the ' + ('AI judge' if r.get('source') == 'ai' else 'keyword rules') + '.'
+        foot = ('Checked by the ' + ('AI guard' if r.get('source') == 'ai' else 'keyword rules') + '.'
                 + ('  Press Return to edit.' if hard
                    else '  Return = edit · \u2318Return = send anyway (logged).'))
 

@@ -123,5 +123,5 @@ def analyze(engine, text, kind='class', name=''):
         except Exception as e:
             result['note'] = f'The AI couldn\'t label this ({e}); the label is a keyword guess. The rules text is still exact.'
     elif kind == 'class':
-        result['note'] = 'The AI judge isn\'t set up yet, so the label is a keyword guess. The rules text below is exact.'
+        result['note'] = 'The AI guard isn\'t set up yet, so the label is a keyword guess. The rules text below is exact.'
     return result

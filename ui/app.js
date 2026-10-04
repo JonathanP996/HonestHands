@@ -92,14 +92,14 @@ function engineBanner() {
   if (e.backend === 'keywords') return '';
   if (e.ready) return '';
   if (e.state === 'needs_setup')
-    return `<div class="banner warn"><div><b>The AI judge needs a one-time setup.</b><div class="small">Until then, checking uses keyword rules only. Set it up in Settings.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
+    return `<div class="banner warn"><div><b>The AI guard needs a one-time setup.</b><div class="small">Until then, checking uses keyword rules only. Set it up in Settings.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     let bar = '';
     if (e.progress && e.progress.total) { const pct = Math.round(100 * e.progress.done / e.progress.total);
       bar = `<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${e.progress.label}: ${pct}% of ${(e.progress.total/1e9).toFixed(1)} GB</div>`; }
-    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message||'Preparing the AI judge…')}</b>${bar}</div></div>`;
+    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message||'Preparing the AI guard…')}</b>${bar}</div></div>`;
   }
-  if (e.state === 'error') return `<div class="banner warn"><div><b>AI judge problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. See Settings.</div></div></div>`;
+  if (e.state === 'error') return `<div class="banner warn"><div><b>AI guard problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. See Settings.</div></div></div>`;
   return '';
 }
 
@@ -120,7 +120,7 @@ function onbStructSig() {
 }
 function paintOnboarding(animate = true) {
   const m = document.getElementById('main');
-  const steps = [welcomeStep, judgeStep, extensionStep, firstClassStep];
+  const steps = [welcomeStep, guardStep, extensionStep, firstClassStep];
   m.innerHTML = `<div class="wrap onb">${steps[Math.min(ONB, steps.length-1)]()}</div>`;
   if (animate) { m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter'); }
   wireOnboarding();
@@ -129,7 +129,7 @@ function paintOnboarding(animate = true) {
 // Update just the download status/progress without rebuilding the screen (no flicker).
 function updateOnbStatus() {
   const box = document.querySelector('.onb-status');
-  if (box) box.innerHTML = judgeStatusHTML();
+  if (box) box.innerHTML = guardStatusHTML();
 }
 function dots(i){ return `<div class="onb-dots">${[0,1,2,3].map(n=>`<span class="${n===i?'on':''}"></span>`).join('')}</div>`; }
 
@@ -145,26 +145,26 @@ function welcomeStep() {
     <div class="btnrow center-row"><button class="btn" id="o-next">Get started</button></div>
     ${dots(0)}</div>`;
 }
-function judgeStatusHTML() {
+function guardStatusHTML() {
   const e = S.engine;
-  if (e.backend === 'keywords') return `<p class="small muted">You’re on keyword rules — no download, but less nuanced. You can switch to the AI judge anytime in Settings.</p>`;
-  if (e.ready) return `<p class="small" style="color:var(--ok)">✓ The AI judge is ready.</p>`;
+  if (e.backend === 'keywords') return `<p class="small muted">You’re on keyword rules — no download, but less nuanced. You can switch to the AI guard anytime in Settings.</p>`;
+  if (e.ready) return `<p class="small" style="color:var(--ok)">✓ The AI guard is ready.</p>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     const pct = e.progress && e.progress.total ? Math.round(100*e.progress.done/e.progress.total) : 0;
     const of = e.progress && e.progress.total ? ` · ${(e.progress.done/1e9).toFixed(1)} of ${(e.progress.total/1e9).toFixed(1)} GB` : '';
     return `<p class="small"><span class="spin"></span> ${h(e.message||'Preparing…')}${of}</p><div class="progress"><div style="width:${pct}%"></div></div>`;
   }
   if (e.state === 'error') return `<p class="small" style="color:var(--stop)">${h(e.message)}</p>`;
-  return `<p class="small muted">${h(e.message||'The AI judge needs a one-time setup.')}</p>`;
+  return `<p class="small muted">${h(e.message||'The AI guard needs a one-time setup.')}</p>`;
 }
-function judgeStep() {
+function guardStep() {
   const e = S.engine;
   const ready = e.ready;
-  const status = judgeStatusHTML();
+  const status = guardStatusHTML();
   return `<div class="onb-card">
-    <h1 class="onb-title">Choose your judge</h1>
+    <h1 class="onb-title">Choose your guard</h1>
     <p class="onb-lead">This is what decides whether a message is OK. The built-in AI runs privately on your Mac after a one-time download. On your machine, the larger model is a great fit.</p>
-    <div class="field"><label>Judge</label><select id="o-be">
+    <div class="field"><label>Guard</label><select id="o-be">
       <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — private, runs on this Mac</option>
       <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
       <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no download</option>
@@ -324,7 +324,7 @@ function classCard(c) {
 function openDocFlow(kind, classId) {
   const isClass = kind === 'class';
   const node = el(`<div><h2>${isClass ? 'Add a class' : 'Add an assignment'}</h2>
-    <p class="sub">${isClass ? 'Name the class and give it the syllabus. The AI-use parts are pulled out word for word, and the judge reads them for every message.' : 'Name the assignment and paste or upload it. Anything about AI in it applies on top of the class rules.'}</p>
+    <p class="sub">${isClass ? 'Name the class and give it the syllabus. The AI-use parts are pulled out word for word, and the guard reads them for every message.' : 'Name the assignment and paste or upload it. Anything about AI in it applies on top of the class rules.'}</p>
     <div class="field"><label>${isClass ? 'Class name' : 'Assignment name'}</label><input id="dn" placeholder="${isClass ? 'e.g. CS 7641 Machine Learning' : 'e.g. Homework 3'}"></div>
     <div class="field"><label>Document</label><div class="btnrow"><button class="btn ghost sm" id="pick">Choose a file…</button>
       <span class="small muted" id="fn">PDF, Word, or text</span></div></div>
@@ -359,7 +359,7 @@ function reviewDraft(kind, classId, draft, meta) {
   const isClass = kind === 'class';
   const node = el(`<div><h2>${isClass ? 'Your professor\'s rules for ' : 'AI rules for '}${h(draft.name)}</h2>
     <p class="sub">${isClass
-      ? 'This is the part of the syllabus about AI, copied as written. For every message you send, the judge reads it and decides like the professor would: peer-style collaboration, or cheating? Edit it if anything is missing or wrong.'
+      ? 'This is the part of the syllabus about AI, copied as written. For every message you send, the guard reads it and decides like the professor would: peer-style collaboration, or cheating? Edit it if anything is missing or wrong.'
       : 'Anything this assignment says about AI or outside help. It applies on top of the class rules.'}</p>
     ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
     <div class="field"><textarea id="ptext" rows="${isClass ? 13 : 7}" placeholder="Paste or type the AI / collaboration rules here">${h(draft.policy_text || '')}</textarea></div>
@@ -480,8 +480,8 @@ function paintSettings() {
   const m = $('#main'); const e = S.engine;
   const modelOpts = Object.entries(e.models).map(([k,v]) => `<option value="${k}" ${e.model===k?'selected':''}>${h(v)}</option>`).join('');
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
-    <div class="card"><h2>The AI judge</h2><p class="sub">Who decides whether a message is OK.</p>
-      <div class="field"><label>Judge</label><select id="be">
+    <div class="card"><h2>The AI guard</h2><p class="sub">Who decides whether a message is OK.</p>
+      <div class="field"><label>Guard</label><select id="be">
         <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — runs on this Mac, private, one-time download</option>
         <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
         <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no AI, no download</option>

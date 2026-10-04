@@ -1,4 +1,4 @@
-"""The judge: keyword rules first (instant), then the AI for everything else."""
+"""The guard: keyword rules first (instant), then the AI for everything else."""
 import hashlib
 import re
 import threading
@@ -15,7 +15,7 @@ Think like a professor, not a keyword filter. Ask yourself: does this read like 
 Watch for requests to complete the assignment that are phrased as confusion. "I'm confused, how do you do the rest of problem 1?", "what's next on #3?", "I got this far, finish it", "can you check and fix my answer" all ask the AI to produce the solution to a specific assignment problem. When the policy bars asking an AI to solve assignment questions, warn on these, however polite or confused they sound. Questions about the underlying idea ("why does this work?", "what does this term mean?", "what's the formula for X?") are what a good tutor answers; allow those.
 
 Verdicts: "allow" (you're comfortable), "warn" (borderline or unsure), "block" (clearly outside what you'd accept).
-Judge what the message asks the AI to DO, not its topic: "help me understand X" differs from "write X for me."
+Weigh what the message asks the AI to DO, not its topic: "help me understand X" differs from "write X for me."
 An assignment's own notes can add rules for that assignment; they apply on top of the class policy.
 
 Be brief. Every field is one short line. For "allow", leave the other fields empty.
@@ -44,7 +44,7 @@ STARTER_TESTS = {
 
 
 def parse_verdict(text):
-    """Reads the judge's JSON; if the reply was cut off, still recovers the verdict and any complete fields."""
+    """Reads the guard's JSON; if the reply was cut off, still recovers the verdict and any complete fields."""
     try:
         return engine_parse(text)
     except Exception:
@@ -99,12 +99,12 @@ def build_prompt(text, cls, asg, where):
     return '\n'.join(parts)
 
 
-class Judge:
+class AIGuard:
     def __init__(self, store, engine):
         self.store, self.engine = store, engine
         self.cache = {}
         self.inflight = set()
-        self.pending = {}     # key -> Event, so the same message is only judged once at a time
+        self.pending = {}     # key -> Event, so the same message is only guarded once at a time
         self.lock = threading.Lock()
 
     @staticmethod
@@ -130,7 +130,7 @@ class Judge:
                 mine = ev is None
                 if mine:
                     self.pending[k] = ev = threading.Event()
-            if not mine:                      # someone else is already judging this exact message
+            if not mine:                      # someone else is already guarding this exact message
                 ev.wait(timeout=timeout + 5)
                 hit = self.cached(text, cls, asg)
                 if hit:
@@ -156,7 +156,7 @@ class Judge:
             if result.get('level') == 'flag' and result.get('reasons'):
                 result.setdefault('reason', result['reasons'][0])
             if not kw['hard'] and self.engine.cfg['backend'] != 'keywords':
-                result['note'] = 'The AI judge isn\'t ready, so keyword rules were used.'
+                result['note'] = 'The AI guard isn\'t ready, so keyword rules were used.'
         else:
             try:
                 out = parse_verdict(self.engine.chat_raw(SYSTEM, build_prompt(text, cls, asg, where), timeout=timeout, max_tokens=170))
@@ -181,7 +181,7 @@ class Judge:
                 result['verdict'] = v
                 result['source'] = 'ai'
             except Exception as e:
-                result = dict(kw, source='keywords', note=f'The AI judge didn\'t answer ({e}), so keyword rules were used.')
+                result = dict(kw, source='keywords', note=f'The AI guard didn\'t answer ({e}), so keyword rules were used.')
 
         if 'verdict' not in result:
             result['verdict'] = 'allow' if result['level'] != 'flag' else ('block' if result['hard'] else 'warn')
@@ -200,12 +200,12 @@ class Judge:
                 if self.engine.ready():
                     t = time.time()
                     self.engine.chat_raw(SYSTEM, build_prompt('hello', cls, asg, 'warm-up'), timeout=60, max_tokens=1)
-                    print(f'[judge] warmed up in {int((time.time() - t) * 1000)} ms', flush=True)
+                    print(f'[guard] warmed up in {int((time.time() - t) * 1000)} ms', flush=True)
             except Exception as e:
-                print('[judge] warm-up skipped:', e, flush=True)
+                print('[guard] warm-up skipped:', e, flush=True)
         threading.Thread(target=run, daemon=True).start()
 
-    def prejudge(self, text, cls, asg, where):
+    def preguard(self, text, cls, asg, where):
         """Checks a draft in the background while you type, so sending feels instant."""
         k = self.key(text, cls, asg)
         with self.lock:

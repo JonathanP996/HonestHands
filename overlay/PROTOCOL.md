@@ -7,7 +7,7 @@ Any platform can supply its own helper (e.g. a Windows one) that speaks this.
 ## App -> helper
     {"cmd":"show","id":"<str>","hard":false,"title":"Hold on a second",
      "context":"CS101 / Essay 2 · Claude","reason":"...","rule":"...","quote":"...",
-     "tip":"...","source":"AI judge","allowSend":true,"allowLater":true}
+     "tip":"...","source":"AI guard","allowSend":true,"allowLater":true}
     {"cmd":"hide"}
     {"cmd":"quit"}
 
