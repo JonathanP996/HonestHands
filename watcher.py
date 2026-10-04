@@ -429,7 +429,17 @@ def find_composer(appel, focused):
 
 
 _LAST = {'where': None, 'text': '', 'pid': None, 't': 0.0}
-_CCACHE = {}   # pid -> {'box', 'where', 't'}: the composer, found once and reused (a full page scan is slow)
+_CCACHE = {}   # pid -> {'box', 'where', 't', 'title'}: the composer, found once and reused (a full page scan is slow)
+
+
+def _window_title(appel):
+    return str(ax(ax(appel, 'AXFocusedWindow') or ax(appel, 'AXMainWindow'), 'AXTitle') or '')
+
+
+def cache_still_valid(entry, title_now, frame):
+    """A remembered message box is only trusted while the SAME tab is showing (the window title is the active tab's title)
+    and the box actually has a size on screen. A box in a tab you switched away from is still 'alive' to Accessibility."""
+    return bool(entry and entry.get('title') == title_now and frame and frame[2] > 0 and frame[3] > 0)
 
 
 def current_prompt(retries=3):
@@ -449,7 +459,8 @@ def current_prompt(retries=3):
     box = None
     fast = False
     c = _CCACHE.get(pid)
-    if c and time.time() - c['t'] < 20 and ax(c['box'], 'AXRole') is not None:
+    title_now = _window_title(appel)
+    if c and time.time() - c['t'] < 20 and ax(c['box'], 'AXRole') is not None and cache_still_valid(c, title_now, _frame_of(c['box'])):
         try:
             if where_am_i(app, c['box'], appel) == c['where']:      # still the same AI page
                 box, where, fast = c['box'], c['where'], True
@@ -499,7 +510,7 @@ def current_prompt(retries=3):
 
     now = time.time()
     if where and box is not None:
-        _CCACHE[pid] = {'box': box, 'where': where, 't': now}
+        _CCACHE[pid] = {'box': box, 'where': where, 't': now, 'title': title_now}
     if text:
         _LAST.update(where=where, text=text, pid=pid, t=now)
     elif (_LAST['text'] and _LAST['pid'] == pid and _LAST['where'] == where
@@ -855,6 +866,7 @@ class Guard:
 
         node = el
         clickable = None
+        clickable_role = None
         chain = []
         for _ in range(6):
             if node is None:
@@ -871,7 +883,7 @@ class Guard:
                     dbg('click_is_send: matched send glyph')
                     return True
                 if role in ('AXButton', 'AXLink', 'AXMenuButton') and clickable is None:
-                    clickable = node
+                    clickable, clickable_role = node, role
             node = ax(node, 'AXParent')
         dbg('click_is_send: cursor chain =', ' < '.join(chain))
         dbg('click_is_send: clickable control found =', clickable is not None)
@@ -919,7 +931,7 @@ class Guard:
                 break
             n = ax(n, 'AXParent')
         dbg('click_is_send: no composer rect; inside web page =', in_page)
-        return clickable is not None and in_page
+        return clickable is not None and clickable_role != 'AXLink' and in_page      # links navigate; they don't send
 
 
 
