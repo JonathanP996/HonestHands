@@ -97,8 +97,9 @@ def suggest_policy(text):
     allowed = re.search(r'\b(permitted|allowed|encouraged|may use|welcome|acceptable)\b', j, I)
     disclose = re.search(r'\b(cite|citation|disclose|acknowledg\w*|document)\b', j, I)
     tutorish = re.search(r'\b(brainstorm\w*|feedback|tutor\w*|explain\w*|study aid|understand\w*)\b', j, I)
+    blanket = re.search(r'\bno\b[^.]{0,50}\b(ai|a\.i\.|artificial intelligence|chatgpt|generative|llms?)\b', j, I)
     policy = 'tutor'
-    if banned:
+    if banned or blanket:
         policy = 'none'
     if allowed and disclose and not banned:
         policy = 'open'

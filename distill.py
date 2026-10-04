@@ -55,6 +55,35 @@ def guess_type(sentence):
     return 'allowed'
 
 
+BROAD_BAN = re.compile(
+    r"\bno\b[^.]{0,50}\b(ai|a\.i\.|artificial intelligence|chatgpt|generative|llms?)\b"
+    r"|\b(ai|artificial intelligence|chatgpt|generative)\b[^.]{0,60}\b(not (be )?(allowed|permitted|used)|prohibit\w*|forbidden|banned|off[- ]limits)\b"
+    r"|\b(do not|don't|may not|must not|cannot|never)\b[^.]{0,40}\b(use|using)\b[^.]{0,30}\b(ai|artificial intelligence|chatgpt)\b", re.I)
+
+
+def pick_category(out, rule_list, fallback):
+    """Turns the model's category answer into none/tutor/open without trusting exact wording."""
+    raw = str(out.get('category') or out.get('policy') or '').strip().lower()
+    reason = str(out.get('category_reason', ''))
+    print('[distill] model category =', repr(raw), '| reason =', reason[:120], flush=True)
+    cat = None
+    if raw in rules.POLICY_LABEL:
+        cat = raw
+    elif re.search(r'\bnone\b|no ai|not allowed|prohibit|ban|forbid', raw):
+        cat = 'none'
+    elif 'tutor' in raw:
+        cat = 'tutor'
+    elif re.search(r'open|disclos|allowed|permit', raw):
+        cat = 'open'
+    # The bullets and the model's own reason are evidence too: a blanket ban in either wins
+    # over a "tutor"/"open" label (or no label at all).
+    ban_text = ' '.join(f"{r.get('rule', '')} {r.get('quote', '')}" for r in rule_list if r.get('type') == 'not_allowed')
+    blanket = bool(BROAD_BAN.search(ban_text)) or bool(BROAD_BAN.search(reason))
+    if cat in (None, 'tutor', 'open') and blanket:
+        return 'none'
+    return cat or fallback
+
+
 def analyze(engine, text, kind='class', name=''):
     text = (text or '').strip()
     if len(text) < 20:
@@ -94,9 +123,7 @@ def analyze(engine, text, kind='class', name=''):
                                                'verdict': v if v in ('allow', 'warn', 'block') else 'warn',
                                                'why': str(e.get('why', '')).strip()})
             if kind == 'class':
-                cat = out.get('category') or out.get('policy')
-                if cat in rules.POLICY_LABEL:
-                    result['policy'] = cat
+                result['policy'] = pick_category(out, result['rules'], result['policy'])
                 result['category_reason'] = str(out.get('category_reason', '')).strip()
                 ex = out.get('ai_policy_excerpt') or []
                 ex = [ex] if isinstance(ex, str) else ex
