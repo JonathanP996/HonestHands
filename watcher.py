@@ -297,10 +297,20 @@ def ai_domain(url):
     return None
 
 
+# Chrome's built-in "Ask Gemini" side panel is not a normal web page (no address we recognise), but its message box is labelled.
+ASK_GEMINI_PANEL = re.compile(r'@ to add tabs|gemini in chrome', re.I)
+ASK_GEMINI_URL = re.compile(r'^(chrome(-untrusted)?|chrome-extension)://.*(glic|gemini)', re.I)
+PANEL = 'Ask Gemini panel'
+
+
 def where_am_i(app, box, appel):
     """Returns a label like 'claude.ai' or 'ChatGPT app' if this is an AI context, else None."""
     bid, name, _ = app_info(app)
+    if bid in BROWSERS and box is not None and ASK_GEMINI_PANEL.search(_label_of(box) or ''):
+        return PANEL
     url = page_url(box)
+    if url and bid in BROWSERS and ASK_GEMINI_URL.search(url):
+        return PANEL
     if url:
         d = ai_domain(url)
         if d:
@@ -459,6 +469,14 @@ def current_prompt(retries=3):
         box = find_composer(appel, focused)
         where = where_am_i(app, box or probe or focused, appel)
         if where is None:
+            if AIG_DEBUG and bid in BROWSERS:
+                chain, n = [], focused or box
+                for _ in range(8):
+                    if n is None:
+                        break
+                    chain.append(f"{ax(n, 'AXRole')}:{(' '.join(str(ax(n, a) or '') for a in ('AXDescription', 'AXTitle', 'AXPlaceholderValue')))[:40]!r}")
+                    n = ax(n, 'AXParent')
+                dbg('not an AI context. url =', page_url(box or focused), '| focus chain:', ' < '.join(chain))
             return None  # a normal website, not an AI context
 
         # Prefer the site's known composer; fall back to the generic finder.
