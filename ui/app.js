@@ -274,20 +274,38 @@ function paintHome() {
         <button class="btn" onclick="TAB='classes';paint()">Add your first class</button></div></div>`;
     return;
   }
-  m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
-    <h1>Start a study session</h1><p class="sub">Pick what you're working on. The guard stays idle until you do.</p>
-    <div class="card"><div class="row">
-      <div><label>Class</label><select id="sc">${S.classes.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select></div>
-      <div><label>Assignment</label><select id="sa"></select></div>
+  let selC = S.classes[0].id, selA = '', selM = 'warn';
+  m.innerHTML = `<div class="wrap sess">${permBanner()}${engineBanner()}
+    <div class="sess-hero"><div><h1>Start a study session</h1>
+      <p class="sub" style="margin:6px 0 0">Pick what you're working on. The guard stays idle until you do.</p></div></div>
+    <div class="step"><span class="n">1</span>Which class?</div>
+    <div class="classgrid" id="cg"></div>
+    <div class="step"><span class="n">2</span>Which assignment?</div>
+    <div class="seg" id="ag"></div>
+    <div class="step"><span class="n">3</span>When you cross a line</div>
+    <div class="modes" id="mg">
+      <button class="mode warn" data-m="warn"><div class="ic">✋</div><div><b>Warn me</b><span>I can override it, and it's logged.</span></div></button>
+      <button class="mode block" data-m="block"><div class="ic">🛑</div><div><b>Block the message</b><span>It won't send until I change it.</span></div></button>
     </div>
-    <div class="field mt"><label>When you cross a line</label><select id="sm">
-      <option value="warn">Warn me — I can override, and it's logged</option>
-      <option value="block">Block the message</option></select></div>
-    <button class="btn" id="go">Start session</button></div></div>`;
-  const fillA = () => { const c = S.classes.find(x => x.id === $('#sc').value);
-    $('#sa').innerHTML = `<option value="">General work for this class</option>` + (c.assignments||[]).map(a => `<option value="${a.id}">${h(a.name)}</option>`).join(''); };
-  $('#sc').onchange = fillA; fillA();
-  $('#go').onclick = async () => { const r = await api().start_session($('#sc').value, $('#sa').value, $('#sm').value);
+    <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
+  const cls = () => S.classes.find(x => x.id === selC);
+  const paintPicks = () => {
+    $('#cg').innerHTML = S.classes.map(c => { const n = (c.rules || []).length, k = (c.assignments || []).length;
+      return `<button class="pick ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
+        <span class="nm">${h(c.name)}</span><span class="meta">${n} rule${n === 1 ? '' : 's'} · ${k} assignment${k === 1 ? '' : 's'}</span></button>`; }).join('');
+    const asg = cls().assignments || [];
+    if (!asg.some(a => a.id === selA)) selA = '';
+    $('#ag').innerHTML = `<button class="${selA === '' ? 'on' : ''}" data-a="">General work</button>` +
+      asg.map(a => `<button class="${a.id === selA ? 'on' : ''}" data-a="${a.id}">${h(a.name)}</button>`).join('');
+    m.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === selM));
+    const an = (asg.find(a => a.id === selA) || {}).name;
+    $('#sum').innerHTML = `Guarding <b>${h(cls().name)}</b>${an ? ' / <b>' + h(an) + '</b>' : ''} · ${selM === 'block' ? 'blocking' : 'warning'} mode`;
+    m.querySelectorAll('.pick').forEach(b => b.onclick = () => { selC = b.dataset.c; paintPicks(); });
+    m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
+  };
+  m.querySelectorAll('.mode').forEach(b => b.onclick = () => { selM = b.dataset.m; paintPicks(); });
+  paintPicks();
+  $('#go').onclick = async () => { const r = await api().start_session(selC, selA, selM);
     if (r.error) toast(r.error); else { TAB = 'home'; refresh(); } };
 }
 

@@ -774,6 +774,7 @@ class Guard:
             cls, asg = self.store.session_targets()
             if cls:
                 self.record(p, cls, asg, 'overlay', 'sent anyway', None)
+                self.sent_anyway = (p.get('text', ''), time.time() + 20)
             front = front_app()
             same = front is not None and front.processIdentifier() == p.get('pid')
             self._release()

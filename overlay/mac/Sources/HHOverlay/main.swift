@@ -267,7 +267,6 @@ final class Controller {
         model.pulse += 1
         place()
         panel.orderFrontRegardless()
-        panel.makeKey()   // key without activating the app, so the very first click lands
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { model.visible = true }
         autoDismiss?.invalidate()
         autoDismiss = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in self?.choose("edit") }

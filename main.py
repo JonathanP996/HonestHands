@@ -2,6 +2,7 @@
 import os
 import sys
 import threading
+import time
 
 import objc
 import webview
@@ -399,6 +400,9 @@ class App:
         if not text:
             return {'verdict': 'allow'}
         where = site or 'browser'
+        sa = getattr(self.guard, 'sent_anyway', None)
+        if sa and sa[0].strip() == text and time.time() < sa[1]:
+            return {'verdict': 'allow'}
         r = self.judge.check(text, cls, asg, where, timeout=12)
         # Map to the extension's simple contract + details for the warning panel.
         verdict = r.get('verdict', 'allow')
