@@ -193,6 +193,18 @@ class Judge:
                     self.cache.pop(next(iter(self.cache)))
         return result
 
+    def warm(self, cls, asg):
+        """Pre-reads the syllabus so the first real message only has to process the message itself."""
+        def run():
+            try:
+                if self.engine.ready():
+                    t = time.time()
+                    self.engine.chat_raw(SYSTEM, build_prompt('hello', cls, asg, 'warm-up'), timeout=60, max_tokens=1)
+                    print(f'[judge] warmed up in {int((time.time() - t) * 1000)} ms', flush=True)
+            except Exception as e:
+                print('[judge] warm-up skipped:', e, flush=True)
+        threading.Thread(target=run, daemon=True).start()
+
     def prejudge(self, text, cls, asg, where):
         """Checks a draft in the background while you type, so sending feels instant."""
         k = self.key(text, cls, asg)

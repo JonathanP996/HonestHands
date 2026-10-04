@@ -220,6 +220,16 @@ class App:
     def on_started(self):
         AppHelper.callAfter(self.setup_main_thread)
         self.engine.autostart()
+        def _warm_when_ready():
+            import time as _t
+            for _ in range(240):
+                if self.engine.ready():
+                    c, a = self.store.session_targets()
+                    if c:
+                        self.judge.warm(c, a)
+                    return
+                _t.sleep(0.5)
+        threading.Thread(target=_warm_when_ready, daemon=True).start()
         self.guard.start_typing_watch()
         watcher.Guard.block_handler = self.show_overlay_block
         try:
@@ -404,6 +414,9 @@ class App:
         if not text:
             return {'verdict': 'allow'}
         where = site or 'browser'
+        hook = getattr(self, 'native_overlay', None)
+        if hook is not None and not self.judge.cached(text, cls, asg):
+            AppHelper.callAfter(hook.checking)
         sa = getattr(self.guard, 'sent_anyway', None)
         if sa and sa[0].strip() == text and time.time() < sa[1]:
             return {'verdict': 'allow'}
@@ -437,6 +450,8 @@ class App:
             return {'verdict': 'block' if hard else 'warn',
                     'reason': r.get('reason', ''), 'rule': r.get('rule', ''),
                     'quote': r.get('quote', ''), 'tip': r.get('tip', ''), 'hard': hard}
+        if hook is not None:
+            AppHelper.callAfter(hook.hide)
         return {'verdict': 'allow'}
 
     def run(self):

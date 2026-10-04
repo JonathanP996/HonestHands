@@ -419,6 +419,7 @@ def find_composer(appel, focused):
 
 
 _LAST = {'where': None, 'text': '', 'pid': None, 't': 0.0}
+_CCACHE = {}   # pid -> {'box', 'where', 't'}: the composer, found once and reused (a full page scan is slow)
 
 
 def current_prompt(retries=3):
@@ -435,7 +436,21 @@ def current_prompt(retries=3):
 
     where = None
     text = ''
-    for attempt in range(max(1, retries)):
+    box = None
+    fast = False
+    c = _CCACHE.get(pid)
+    if c and time.time() - c['t'] < 20 and ax(c['box'], 'AXRole') is not None:
+        try:
+            if where_am_i(app, c['box'], appel) == c['where']:      # still the same AI page
+                box, where, fast = c['box'], c['where'], True
+                text = read_text(box).strip()
+                if _looks_placeholder(text):
+                    text = ''
+        except Exception:
+            fast = False
+    if not fast:
+        _CCACHE.pop(pid, None)
+    for attempt in range(0 if fast else max(1, retries)):
         focused = ax(appel, 'AXFocusedUIElement')
         # First figure out where we are (needs some element to read the URL from).
         probe = focused
@@ -465,6 +480,8 @@ def current_prompt(retries=3):
         time.sleep(0.04)
 
     now = time.time()
+    if where and box is not None:
+        _CCACHE[pid] = {'box': box, 'where': where, 't': now}
     if text:
         _LAST.update(where=where, text=text, pid=pid, t=now)
     elif (_LAST['text'] and _LAST['pid'] == pid and _LAST['where'] == where
@@ -634,8 +651,10 @@ class Guard:
             return False
         self.locked = True
         self._held = (trigger, loc)
+        self._t_start = time.time()
         try:
             p = current_prompt()
+            dbg(f'timing: read prompt {int((time.time() - self._t_start) * 1000)} ms')
             dbg('intercept: where=', (p or {}).get('where'), 'text=', repr((p or {}).get('text','')[:60]))
             if not p or not p['text']:
                 dbg('intercept: no text -> ALLOW')
@@ -654,6 +673,7 @@ class Guard:
                 dbg('intercept: cached/instant verdict =', r.get('verdict'), 'level=', r.get('level'))
                 return self.act(r, p, cls, asg, trigger)  # releases on allow; stays locked on flag
             dbg('intercept: no cached verdict -> async AI judge, HOLDING')
+            self._show_checking()
 
             # Need the AI. Stay locked, judge in the background, decide in _finish.
             threading.Thread(target=self._judge_then_send, args=(p, cls, asg, trigger, loc), daemon=True).start()
@@ -681,8 +701,19 @@ class Guard:
             r['verdict'] = 'allow' if r['level'] != 'flag' else 'warn'
         AppHelper.callAfter(self._finish, r, p, cls, asg, trigger, loc)
 
+    def _show_checking(self):
+        hook = Guard.overlay_hook
+        if hook is not None:
+            try:
+                AppHelper.callAfter(hook.checking)
+            except Exception:
+                pass
+
     def _finish(self, r, p, cls, asg, trigger, loc):
+        dbg(f'timing: click/enter -> verdict {int((time.time() - getattr(self, "_t_start", time.time())) * 1000)} ms total (judge {r.get("ms")} ms)')
         dbg('_finish: level=', r['level'], 'verdict=', r.get('verdict'))
+        if r['level'] in ('ok', 'note') and Guard.overlay_hook is not None:
+            Guard.overlay_hook.hide()
         if r['level'] not in ('ok', 'note'):
             # Flagged: show the warning (stays locked until the dialog is closed).
             hard = self.is_hard(r)
@@ -836,7 +867,8 @@ class Guard:
             _, _, pid = app_info(app)
             appel = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(appel, 0.3)
-            box = find_profiled_composer(appel, p['where']) or find_composer(appel, ax(appel, 'AXFocusedUIElement'))
+            cc = _CCACHE.get(pid)
+            box = (cc or {}).get('box') or find_profiled_composer(appel, p['where']) or find_composer(appel, ax(appel, 'AXFocusedUIElement'))
             rect = _frame_of(box)
             dbg('click_is_send: click at', (round(pt.x), round(pt.y)), 'composer rect =',
                 tuple(round(v) for v in rect) if rect else None)

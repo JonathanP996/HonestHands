@@ -98,6 +98,13 @@ class SubprocessOverlay(OverlayBackend):
         except Exception:
             pass
 
+    def checking(self):
+        try:
+            if self._ensure():
+                self._send({'cmd': 'checking'})
+        except Exception:
+            pass
+
     def hide(self):
         try:
             self._send({'cmd': 'hide'})

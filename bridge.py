@@ -75,6 +75,7 @@ class Api:
         self._store.log({'t': time.time(), 'event': 'session start', 'class': c['name'],
                          'assignment': a['name'] if a else '', 'mode': self._store.data['mode']})
         self._app.refresh_menu()
+        self._app.judge.warm(c, a)
         return self.state()
 
     def end_session(self, pin=''):
