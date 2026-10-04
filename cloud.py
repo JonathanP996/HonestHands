@@ -29,6 +29,10 @@ class CloudError(Exception):
     pass
 
 
+def code_is_429(pgc):
+    return str(pgc) == '429'
+
+
 def iso(t):
     return datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
 
@@ -95,6 +99,16 @@ class Cloud:
             return 'That already exists.'
         if 'over_email_send_rate_limit' in pgc or 'rate limit' in msg.lower():
             return 'Too many emails right now. Wait a few minutes, then try again.'
+        if pgc == 'invalid_credentials' or 'invalid login credentials' in msg.lower():
+            return 'Wrong email or password.'
+        if pgc == 'email_not_confirmed' or 'not confirmed' in msg.lower():
+            return 'Confirm your email first: click the link Supabase emailed you (the page it opens may say "can\'t be reached"; that\'s fine, it still confirms you). Then sign in.'
+        if pgc in ('weak_password',) or 'password should be' in msg.lower():
+            return 'Choose a longer password (at least 8 characters).'
+        if pgc == 'user_already_exists' or 'already registered' in msg.lower():
+            return 'That email already has an account. Sign in instead.'
+        if pgc == 'over_request_rate_limit' or code_is_429(pgc):
+            return 'Too many tries. Wait a minute, then try again.'
         if 'otp_expired' in pgc or 'expired' in msg.lower() or 'invalid' in msg.lower() and 'token' in msg.lower():
             return 'That code is wrong or expired. Ask for a new one.'
         return msg
@@ -151,6 +165,37 @@ class Cloud:
             self._save()
         self.kick()
         return self.me()
+
+    def _start_session(self, p):
+        with self.lock:
+            self._adopt(p)
+            self.c.setdefault('sharing', True)
+            self.c.setdefault('last_event_t', 0)
+            self.c['last_notified_t'] = time.time()
+            self._save()
+        self.kick()
+        return self.me()
+
+    def sign_up(self, email, password):
+        """Create an account. If the project requires email confirmation there is no session yet."""
+        email = (email or '').strip().lower()
+        if '@' not in email:
+            raise CloudError('Enter a valid email address.')
+        if len(password or '') < 8:
+            raise CloudError('Choose a password with at least 8 characters.')
+        code, p = self._http('POST', '/auth/v1/signup', {'email': email, 'password': password})
+        if code not in (200, 201):
+            raise CloudError(self._friendly(code, p))
+        if isinstance(p, dict) and p.get('access_token'):
+            return dict(self._start_session(p), needs_confirm=False)
+        return {'needs_confirm': True}
+
+    def sign_in(self, email, password):
+        email = (email or '').strip().lower()
+        code, p = self._http('POST', '/auth/v1/token?grant_type=password', {'email': email, 'password': password or ''})
+        if code != 200 or 'access_token' not in p:
+            raise CloudError(self._friendly(code, p))
+        return self._start_session(p)
 
     def sign_out(self):
         try:

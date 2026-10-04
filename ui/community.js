@@ -43,25 +43,20 @@ function paintCommError(msg) {
   $('#so').onclick = async () => { await api().cloud_sign_out(); paintCommunity(); };
 }
 
-// ---------------------------------------------------------------- sign in (email code)
-function paintSignIn(email = '') {
+// ---------------------------------------------------------------- sign in / create account (email + password)
+function paintSignIn(email = '', mode = 'in') {
   const m = $('#main');
   m.innerHTML = `<div class="wrap comm"><div class="authwrap">
     <div class="authhero rise" style="--i:0"><div class="onb-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17.5 14.3A5.5 5.5 0 0 1 20.5 19"/></svg></div>
       <h1>Walk this out together</h1>
       <p class="onb-lead">Pair up with someone you trust. They see when you lock in, and any prompt you send despite a warning. Nothing else.</p></div>
     <div class="authcard rise" style="--i:1" id="authcard">
-      <div id="step1">
-        <label>Your email</label>
-        <input id="em" type="email" placeholder="you@school.edu" autocomplete="email" value="${h(email)}">
-        <button class="btn wide" id="send">Email me a sign-in code</button>
-      </div>
-      <div id="step2" hidden>
-        <label>Enter the code we emailed to <b id="emshow"></b></label>
-        <input id="code" class="codein" inputmode="numeric" maxlength="8" placeholder="123456" autocomplete="one-time-code">
-        <button class="btn wide" id="verify">Sign in</button>
-        <div class="linkrow"><a href="#" id="resend">Send a new code</a> · <a href="#" id="back">Use a different email</a></div>
-      </div>
+      <div class="segmode authtabs" id="tabs"><button data-t="in" class="${mode === 'in' ? 'on' : ''}">Sign in</button><button data-t="up" class="${mode === 'up' ? 'on' : ''}">Create account</button></div>
+      <label>Email</label>
+      <input id="em" type="email" placeholder="you@school.edu" autocomplete="email" value="${h(email)}">
+      <label style="margin-top:14px">Password</label>
+      <div class="pwbox"><input id="pw" type="password" placeholder="${mode === 'up' ? 'At least 8 characters' : 'Your password'}" autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}"><button type="button" id="showpw">Show</button></div>
+      <button class="btn wide" id="go">${mode === 'up' ? 'Create account' : 'Sign in'}</button>
       <p class="authmsg" id="authmsg"></p>
     </div>
     <div class="shares rise" style="--i:2">
@@ -69,26 +64,19 @@ function paintSignIn(email = '') {
       <div><b>Never shared</b><span>Your syllabi and assignments · the text of clean or flagged messages (those are counts only)</span></div>
     </div></div></div>`;
   const msg = (t, bad = true) => { const e = $('#authmsg'); e.textContent = t; e.className = 'authmsg ' + (bad ? 'bad' : 'good'); };
+  $('#tabs').querySelectorAll('button').forEach(b => b.onclick = () => paintSignIn($('#em').value, b.dataset.t));
+  $('#showpw').onclick = () => { const p = $('#pw'); const show = p.type === 'password'; p.type = show ? 'text' : 'password'; $('#showpw').textContent = show ? 'Hide' : 'Show'; };
   let busy = false;
-  const send = async () => {
-    if (busy) return; busy = true; $('#send').disabled = true; msg('Sending…', false);
-    const em = $('#em').value.trim();
-    const r = await api().cloud_send_code(em);
-    busy = false; $('#send').disabled = false;
+  const go = async () => {
+    if (busy) return; busy = true; $('#go').disabled = true; msg(mode === 'up' ? 'Creating your account…' : 'Signing in…', false);
+    const em = $('#em').value.trim(), pw = $('#pw').value;
+    const r = mode === 'up' ? await api().cloud_sign_up(em, pw) : await api().cloud_sign_in(em, pw);
+    busy = false; $('#go').disabled = false;
     if (r && r.error) return msg(r.error);
-    $('#emshow').textContent = em; $('#step1').hidden = true; $('#step2').hidden = false; msg('Check your inbox (and spam).', false); $('#code').focus();
+    if (r && r.needs_confirm) { paintSignIn(em, 'in'); return setTimeout(() => { const e = $('#authmsg'); if (e) { e.textContent = 'Account created. Click the link in the email we sent to confirm it, then sign in here. (The page the link opens may say "can\'t be reached". That is fine.)'; e.className = 'authmsg good'; } }, 30); }
+    toast(mode === 'up' ? 'Account created.' : 'Signed in.'); paintCommunity();
   };
-  $('#send').onclick = send; $('#resend').onclick = (e) => { e.preventDefault(); send(); };
-  $('#em').onkeydown = (e) => { if (e.key === 'Enter') send(); };
-  $('#back').onclick = (e) => { e.preventDefault(); $('#step2').hidden = true; $('#step1').hidden = false; msg(''); };
-  const verify = async () => {
-    if (busy) return; busy = true; $('#verify').disabled = true; msg('Signing in…', false);
-    const r = await api().cloud_verify($('#em').value.trim(), $('#code').value);
-    busy = false; $('#verify').disabled = false;
-    if (r && r.error) return msg(r.error);
-    toast('Signed in.'); paintCommunity();
-  };
-  $('#verify').onclick = verify; $('#code').onkeydown = (e) => { if (e.key === 'Enter') verify(); };
+  $('#go').onclick = go; $('#pw').onkeydown = (e) => { if (e.key === 'Enter') go(); }; $('#em').onkeydown = (e) => { if (e.key === 'Enter') $('#pw').focus(); };
 }
 
 // ---------------------------------------------------------------- pick a handle

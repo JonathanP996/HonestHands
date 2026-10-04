@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-DB = {'users': {}, 'profiles': {}, 'partnerships': [], 'events': {}, 'sessions': {}, 'daily': {}, 'codes': {}, 'tokens': {}}
+DB = {'pw': {}, 'users': {}, 'profiles': {}, 'partnerships': [], 'events': {}, 'sessions': {}, 'daily': {}, 'codes': {}, 'tokens': {}}
 
 
 def new_user(email):
@@ -56,6 +56,14 @@ class H(BaseHTTPRequestHandler):
             if DB['codes'].get(body['email']) != body['token']: return self._send(403, {'error_code': 'otp_expired', 'msg': 'Token has expired or is invalid'})
             uid = DB['users'].get(body['email']) or new_user(body['email'])
             return self._send(200, self._issue(uid, body['email']))
+        if p == '/auth/v1/signup':
+            if body['email'] in DB['users']: return self._send(200, {'id': str(uuid.uuid4()), 'email': body['email']})   # existing: no session, no error
+            uid = new_user(body['email']); DB['pw'][body['email']] = body['password']
+            return self._send(200, self._issue(uid, body['email']))
+        if p == '/auth/v1/token' and q.get('grant_type') == 'password':
+            if DB['pw'].get(body['email']) != body['password'] or body['email'] not in DB['users']:
+                return self._send(400, {'error_code': 'invalid_credentials', 'msg': 'Invalid login credentials'})
+            return self._send(200, self._issue(DB['users'][body['email']], body['email']))
         if p == '/auth/v1/token':
             uid = DB['tokens'].get(body['refresh_token'])
             return self._send(200, self._issue(uid, 'x')) if uid else self._send(400, {'msg': 'bad refresh'})
@@ -146,6 +154,14 @@ log_a = [{'t': now - 300, 'where': 'gemini.google.com', 'class': 'Machine Learni
          {'t': now - 200, 'where': 'gemini.google.com', 'class': 'Machine Learning', 'assignment': 'Homework2', 'text': 'my private clean question about my diary', 'result': 'ok'}]
 A = cloud.Cloud(FakeStore(log_a), FakeApp()); B = cloud.Cloud(FakeStore([]), FakeApp())
 
+try: A.sign_up('dana@school.edu', 'short'); check(False, 'rejects a short password')
+except cloud.CloudError: check(True, 'password sign-up rejects a short password')
+D = cloud.Cloud(FakeStore([]), FakeApp()); r = D.sign_up('dana@school.edu', 'correct horse battery'); check(D.signed_in and r['needs_confirm'] is False, 'password sign-up signs you straight in')
+D.sign_out(); check(not D.signed_in, 'sign out works for password accounts')
+try: D.sign_in('dana@school.edu', 'wrong password'); check(False, 'wrong password')
+except cloud.CloudError as e: check('Wrong email or password' in str(e), 'a wrong password gets a friendly message')
+check(D.sign_in('dana@school.edu', 'correct horse battery')['id'], 'password sign-in works')
+check(D.sign_up('dana@school.edu', 'another password 1')['needs_confirm'] is True, 'signing up with an existing email does not sign you in')
 try: A.send_code('nope'); check(False, 'rejects a bad email')
 except cloud.CloudError: check(True, 'rejects a bad email')
 A.send_code('alice@school.edu')

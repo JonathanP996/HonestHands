@@ -549,6 +549,12 @@ class Api:
     def cloud_verify(self, email, code):
         return self._cloud(self._app.cloud.verify, email, code)
 
+    def cloud_sign_up(self, email, password):
+        return self._cloud(self._app.cloud.sign_up, email, password)
+
+    def cloud_sign_in(self, email, password):
+        return self._cloud(self._app.cloud.sign_in, email, password)
+
     def cloud_sign_out(self):
         self._app.cloud.sign_out()
         return True
