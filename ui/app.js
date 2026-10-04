@@ -42,13 +42,6 @@ async function askPin(reason) {
   });
 }
 
-// Scale the sidebar's vertical spacing to the window so all items fit (width/icons/text scale freely).
-function fitRail() {
-  const rv = Math.max(1, Math.min(1.6, (window.innerHeight - 28) / 600));
-  document.documentElement.style.setProperty('--rv', rv.toFixed(3));
-}
-window.addEventListener('resize', fitRail); fitRail();
-
 async function refresh() { S = await api().state(); paint(); }
 
 // ---- top-level paint ----
