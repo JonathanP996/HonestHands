@@ -214,3 +214,45 @@ async function openSession(s) {
       ${e.reasons ? `<div class="sd-why">${e.reasons.map(h).join(' ')}</div>` : ''}</div></div>`; }).join('')
     : '<p class="muted">No messages were checked in this session.</p>';
 }
+
+
+// =====================================================================
+//  Start session: everything fades, the chosen box glides to the middle and swells into the live session card
+// =====================================================================
+async function morphStart(pick, startPromise) {
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const main = $('#main'), first = pick.getBoundingClientRect();
+  const color = [...pick.classList].find(c => c.startsWith('cc-')) || 'cc-lav';
+  const clone = document.createElement('div');
+  clone.className = 'morph ' + color;
+  clone.innerHTML = `<span class="mname">${pick.querySelector('.nm').innerHTML}</span>`;
+  Object.assign(clone.style, { top: first.top + 'px', left: first.left + 'px', width: first.width + 'px', height: first.height + 'px' });
+  document.body.appendChild(clone);
+  pick.style.visibility = 'hidden';
+  main.classList.add('leaving');                                   // the rest of the page fades away
+
+  // stage 1: glide to the middle of the page
+  const mr = main.getBoundingClientRect();
+  clone.style.transition = 'top .55s cubic-bezier(.3,.9,.25,1), left .55s cubic-bezier(.3,.9,.25,1), transform .55s cubic-bezier(.3,.9,.25,1)';
+  nextFrame(() => { clone.style.top = (mr.top + (mr.height - first.height) / 2 - 10) + 'px';
+                    clone.style.left = (mr.left + (mr.width - first.width) / 2) + 'px'; clone.style.transform = 'scale(1.05)'; });
+  const [res] = await Promise.all([startPromise, wait(620)]);
+  if (res && res.error) {                                           // couldn't start: put everything back
+    toast(res.error); clone.remove(); pick.style.visibility = ''; main.classList.remove('leaving'); return;
+  }
+
+  // stage 2: render the real session card (hidden), measure it, and swell the box to exactly that size
+  S = res; TAB = 'home';
+  main.classList.remove('leaving');
+  document.body.classList.add('morphing');
+  paint();
+  main.classList.remove('enter');
+  const last = $('#sessbig').getBoundingClientRect();
+  clone.style.transition = 'top .85s cubic-bezier(.65,0,.2,1), left .85s cubic-bezier(.65,0,.2,1), width .85s cubic-bezier(.65,0,.2,1), height .85s cubic-bezier(.65,0,.2,1), border-radius .85s ease, transform .85s ease';
+  clone.classList.add('expanding');
+  nextFrame(() => Object.assign(clone.style, { top: last.top + 'px', left: last.left + 'px', width: last.width + 'px', height: last.height + 'px',
+                                               borderRadius: '34px', transform: 'none' }));
+  await wait(900);
+  document.body.classList.remove('morphing');                       // reveal the real card; its text eases in
+  nextFrame(() => { clone.style.transition = 'opacity .25s'; clone.style.opacity = '0'; setTimeout(() => clone.remove(), 300); });
+}

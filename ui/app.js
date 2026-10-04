@@ -246,18 +246,28 @@ async function finishOnboarding() {
 function paintHome() {
   const m = $('#main'); const sess = S.session;
   if (sess) {
-    m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
-      <div class="card cc cc-${sess.color || 'lav'}">
-        <div class="sess-grid">
-          <div><div class="small muted">Guarding now</div>
-            <h1>${h(sess.class)}${sess.assignment ? ' <span class="muted" style="font-weight:400">/ '+h(sess.assignment)+'</span>' : ''}</h1>
-            <div class="mt"><span class="tag ${sess.policy}">${h(S.policy_labels[sess.policy])}</span></div></div>
-          <div class="timer-wrap"><div class="timer-lab">Locked in for</div><div class="timer" id="sessTimer">${fmtDur(sess.elapsed||0)}</div></div>
-          <div class="timer-wrap"><div class="timer-lab">Today</div><div class="figure">${S.stats.today}</div><div class="small muted">${S.stats.flagged} flagged · ${S.stats.overridden} overridden</div></div>
+    const st = S.stats;
+    m.innerHTML = `<div class="wrap sb-wrap">${permBanner()}${engineBanner()}
+      <div class="sessbig cc-${sess.color || 'lav'}" id="sessbig">
+        <div class="sb-top sb-in" style="--i:0"><span class="sb-live"><i></i>Guarding now</span>
+          <span class="sb-tag">${h(S.policy_labels[sess.policy] || '')}</span></div>
+        <div class="sb-mid">
+          <h1 class="sb-class sb-in" style="--i:1">${h(sess.class)}</h1>
+          ${sess.assignment ? `<div class="sb-asg sb-in" style="--i:2">${h(sess.assignment)}</div>` : ''}
+          <div class="sb-timer-lab sb-in" style="--i:3">Locked in for</div>
+          <div class="sb-timer sb-in" style="--i:4" id="sessTimer">${fmtDur(sess.elapsed||0)}</div>
         </div>
-        <div class="btnrow mt" style="margin-top:20px"><button class="btn ghost" id="end">End session</button></div>
+        <div class="sb-bot sb-in" style="--i:5">
+          <div class="sb-stats">
+            <div><b id="sb-n-today">0</b><span>checked today</span></div>
+            <div><b id="sb-n-flag">0</b><span>flagged</span></div>
+            <div class="bad"><b id="sb-n-over">0</b><span>overridden</span></div>
+          </div>
+          <button class="btn ghost" id="end">End session</button>
+        </div>
       </div>
-      <p class="small muted center">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
+      <p class="small muted center" style="margin-top:14px">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
+    countTo($('#sb-n-today'), st.today || 0, { dur: 900 }); countTo($('#sb-n-flag'), st.flagged || 0, { dur: 900 }); countTo($('#sb-n-over'), st.overridden || 0, { dur: 900 });
     startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
     $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
       const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };
@@ -290,8 +300,12 @@ function paintHome() {
     m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
   };
   paintPicks();
-  $('#go').onclick = async () => { const r = await api().start_session(selC, selA, 'warn');
-    if (r.error) toast(r.error); else { TAB = 'home'; refresh(); } };
+  $('#go').onclick = async () => {
+    const pick = m.querySelector('.pick.on');
+    if (pick && !reduceMotion()) return morphStart(pick, api().start_session(selC, selA, 'warn'));
+    const r = await api().start_session(selC, selA, 'warn');
+    if (r.error) toast(r.error); else { TAB = 'home'; refresh(); }
+  };
 }
 
 // ---- Classes ----

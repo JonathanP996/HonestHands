@@ -552,3 +552,48 @@ select.mini{width:auto;padding:6px 10px;font-size:12.5px;border-radius:999px}
 
 /* history: give the big headline room under the page title */
 .hist{padding-top:34px}
+
+/* =====================================================================
+   Live session: one big card; start-session morph
+   ===================================================================== */
+#main.leaving .wrap{opacity:0;transform:translateY(14px) scale(.985);filter:blur(3px);transition:opacity .38s ease,transform .45s ease,filter .4s ease}
+.morph{position:fixed;z-index:60;background:var(--cl,#e4d9f8);color:#171a21;border-radius:26px;padding:22px;overflow:hidden;
+  box-shadow:0 30px 60px -28px rgba(0,0,0,.6);display:flex;align-items:flex-start;will-change:top,left,width,height}
+.morph.cc-ink{background:#0c0d10;color:#fff}
+.morph .mname{font-family:var(--carve);font-size:24px;font-weight:600;line-height:1.15;transition:opacity .35s ease,font-size .85s ease}
+.morph.expanding .mname{opacity:0}
+body.morphing .sessbig{visibility:hidden}
+body.morphing .sb-in{animation:none;opacity:0}
+
+.sb-wrap{max-width:none}
+.sessbig{position:relative;overflow:hidden;isolation:isolate;border-radius:34px;color:#171a21;
+  background:var(--cl,#e4d9f8);min-height:calc(100vh - 235px);padding:clamp(26px,4vw,54px);display:flex;flex-direction:column;justify-content:space-between;
+  box-shadow:0 40px 80px -40px rgba(0,0,0,.65)}
+.sessbig.cc-ink{background:#0c0d10;color:#fff}
+/* slow drifting light so the big card feels alive */
+.sessbig::before,.sessbig::after{content:"";position:absolute;z-index:-1;border-radius:50%;filter:blur(60px);opacity:.55;pointer-events:none}
+.sessbig::before{width:55%;aspect-ratio:1;left:-12%;top:-30%;background:radial-gradient(circle,rgba(255,255,255,.85),transparent 65%);animation:drift1 14s ease-in-out infinite alternate}
+.sessbig::after{width:45%;aspect-ratio:1;right:-10%;bottom:-25%;background:radial-gradient(circle,color-mix(in srgb,var(--cd,#fff) 55%,transparent),transparent 65%);animation:drift2 17s ease-in-out infinite alternate}
+.sessbig.cc-ink::before{background:radial-gradient(circle,rgba(255,255,255,.12),transparent 65%)}
+@keyframes drift1{to{transform:translate(18%,22%) scale(1.15)}}@keyframes drift2{to{transform:translate(-20%,-18%) scale(1.2)}}
+.sb-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sb-live{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+.sb-live i{width:11px;height:11px;border-radius:50%;background:#e0453d;animation:ping 1.8s infinite}
+.sb-tag{font-size:13.5px;font-weight:700;padding:7px 16px;border-radius:999px;background:rgba(255,255,255,.7);color:#171a21}
+.sessbig.cc-ink .sb-tag{background:rgba(255,255,255,.14);color:#fff}
+.sb-mid{text-align:center;padding:2vh 0}
+.sb-class{font-family:var(--carve);font-weight:600;font-size:clamp(46px,7.2vw,104px);line-height:1;letter-spacing:-1px}
+.sb-asg{font-size:clamp(18px,2.2vw,30px);opacity:.65;margin-top:10px}
+.sb-timer-lab{font-size:14px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;opacity:.6;margin-top:clamp(18px,4vh,46px)}
+.sb-timer{font-family:var(--fig);font-size:clamp(76px,13vw,184px);line-height:.95;letter-spacing:-3px;margin-top:6px;font-variant-numeric:tabular-nums}
+.sb-bot{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.sb-stats{display:flex;gap:clamp(22px,4vw,56px);flex-wrap:wrap}
+.sb-stats b{display:block;font-family:var(--fig);font-size:clamp(38px,5vw,64px);line-height:1;font-weight:400}
+.sb-stats span{font-size:14px;font-weight:600;opacity:.65}
+.sb-stats .bad b{color:#c8372f}.sessbig.cc-ink .sb-stats .bad b{color:#ff8a82}
+.sessbig .btn.ghost{background:rgba(255,255,255,.72);color:#171a21;border-color:transparent;padding:14px 30px;font-size:15.5px}
+.sessbig.cc-ink .btn.ghost{background:rgba(255,255,255,.14);color:#fff}
+.sessbig .btn.ghost:hover{background:#fff}.sessbig.cc-ink .btn.ghost:hover{background:rgba(255,255,255,.24)}
+.sb-in{opacity:0;transform:translateY(16px);animation:sbin .7s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--i,0) * 90ms)}
+@keyframes sbin{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sessbig::before,.sessbig::after,.sb-live i{animation:none!important}.sb-in{animation:none;opacity:1;transform:none}}
