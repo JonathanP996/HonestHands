@@ -297,10 +297,9 @@ function paintHome() {
 function paintClasses() {
   const m = $('#main');
   m.innerHTML = `<div class="wrap">${engineBanner()}
-    <div class="row" style="align-items:center"><div style="flex:2"><h1>Classes</h1>
-      <p class="sub">Each class has its own AI rules, read from its syllabus.</p></div>
-      <div style="flex:1;text-align:right"><button class="btn" id="add">Add a class</button></div></div>
-    <div class="grid">${S.classes.map(classCard).join('') || '<p class="muted">No classes yet.</p>'}</div></div>`;
+    <h1>Classes</h1><p class="sub">Each class has its own AI rules, read from its syllabus.</p>
+    <div class="grid">${S.classes.map(classCard).join('')}
+      <button class="addtile" id="add" aria-label="Add a class" title="Add a class"><span>+</span></button></div></div>`;
   $('#add').onclick = () => openDocFlow('class');
   m.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editClass(b.dataset.edit));
   m.querySelectorAll('[data-view]').forEach(b => b.onclick = () => viewClass(b.dataset.view));
