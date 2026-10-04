@@ -44,6 +44,20 @@ async function askPin(reason) {
 
 async function refresh() { S = await api().state(); paint(); }
 
+// ---- sidebar greeting (signed-in users) ----
+function paintWelcome() {
+  const cu = (S && S.cloud_user) || {}, box = document.getElementById('railwelcome');
+  const first = (cu.name || '').trim().split(/\s+/)[0];
+  const on = !!(cu.signed_in && first);
+  box.hidden = !on;
+  document.querySelector('#rail .logo').classList.toggle('has-welcome', on);
+  if (!on) return;
+  $('#rw-name').textContent = first;
+  $('#rw-av').textContent = first[0].toUpperCase();
+  $('#rw-av').style.setProperty('--hue', avHue(first));
+}
+async function refreshWelcome() { S = await api().state(); paintWelcome(); }
+
 // ---- top-level paint ----
 const TAB_META = {
   home:      { title: 'Study session', crumb: 'HonestHands' },
@@ -71,6 +85,7 @@ function paint() {
   const rail = document.getElementById('rail');
   if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.visibility='hidden'; paintOnboarding(); return; }
   rail.style.visibility = 'visible'; document.getElementById('topbar').style.visibility='visible';
+  paintWelcome();
   document.querySelectorAll('#rail .railbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === TAB));
   const meta = TAB_META[TAB] || TAB_META.home;
   const sess = S.session;

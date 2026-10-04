@@ -40,7 +40,7 @@ function paintCommError(msg) {
   $('#main').innerHTML = `<div class="wrap comm"><div class="authcard rise"><h2>Can't reach the community</h2>
     <p class="sub">${h(msg)}</p><div class="btnrow"><button class="btn" id="retry">Try again</button><button class="btn ghost" id="so">Sign out</button></div></div></div>`;
   $('#retry').onclick = paintCommunity;
-  $('#so').onclick = async () => { await api().cloud_sign_out(); paintCommunity(); };
+  $('#so').onclick = async () => { await api().cloud_sign_out(); await refreshWelcome(); paintCommunity(); };
 }
 
 // ---------------------------------------------------------------- sign in / create account (email + password)
@@ -74,7 +74,7 @@ function paintSignIn(email = '', mode = 'in') {
     busy = false; $('#go').disabled = false;
     if (r && r.error) return msg(r.error);
     if (r && r.needs_confirm) { paintSignIn(em, 'in'); return setTimeout(() => { const e = $('#authmsg'); if (e) { e.textContent = 'Account created. Click the link in the email we sent to confirm it, then sign in here. (The page the link opens may say "can\'t be reached". That is fine.)'; e.className = 'authmsg good'; } }, 30); }
-    toast(mode === 'up' ? 'Account created.' : 'Signed in.'); paintCommunity();
+    toast(mode === 'up' ? 'Account created.' : 'Signed in.'); refreshWelcome(); paintCommunity();
   };
   $('#go').onclick = go; $('#pw').onkeydown = (e) => { if (e.key === 'Enter') go(); }; $('#em').onkeydown = (e) => { if (e.key === 'Enter') $('#pw').focus(); };
 }
@@ -96,7 +96,7 @@ function paintProfileSetup(st) {
     const r = await api().cloud_set_profile($('#hd').value, $('#dn').value);
     $('#go').disabled = false;
     if (r && r.error) { const e = $('#authmsg'); e.textContent = r.error; e.className = 'authmsg bad'; return; }
-    paintCommunity();
+    refreshWelcome(); paintCommunity();
   };
   $('#go').onclick = go; $('#hd').onkeydown = (e) => { if (e.key === 'Enter') go(); };
 }
@@ -141,7 +141,7 @@ function paintCommHome(me) {
     toast('Invite sent to ' + r.name + '.'); $('#ih').value = ''; refreshComm();
   };
   $('#ih').onkeydown = (e) => { if (e.key === 'Enter') $('#inv').click(); };
-  $('#so').onclick = async () => { await api().cloud_sign_out(); paintCommunity(); };
+  $('#so').onclick = async () => { await api().cloud_sign_out(); await refreshWelcome(); paintCommunity(); };
   $('#share').onchange = async (e) => { const r = await api().cloud_set_sharing(e.target.checked); toast(e.target.checked ? 'Sharing on.' : 'Sharing paused. Nothing new is uploaded.'); };
   refreshComm();
   COMM_TIMER = setInterval(() => { if (TAB !== 'community' || !document.getElementById('feed')) { clearInterval(COMM_TIMER); return; } refreshComm(); }, 15000);

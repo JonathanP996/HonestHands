@@ -213,6 +213,9 @@ class Cloud:
     def me(self):
         rows = self._rest('GET', f'profiles?id=eq.{self.uid}&select={PROFILE_COLS}')
         p = rows[0] if rows else {'id': self.uid, 'handle': None, 'display_name': (self.c.get('email') or '').split('@')[0]}
+        if p.get('handle') and self.c.get('display_name') != p.get('display_name'):
+            self.c['display_name'] = p.get('display_name')       # so the sidebar can greet you without a network call
+            self._save()
         return {'id': p['id'], 'handle': p.get('handle'), 'display_name': p.get('display_name'), 'email': self.c.get('email'),
                 'sharing': bool(self.c.get('sharing', True))}
 

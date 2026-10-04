@@ -114,6 +114,7 @@ class Api:
             'ext_live': self._app.extension_seen_recently(),
             'stats': dict(tally(msgs), today=len(msgs)),
             'policy_labels': rules.POLICY_LABEL,
+            'cloud_user': {'signed_in': self._app.cloud.signed_in, 'name': self._app.cloud.c.get('display_name') or ''},
         }
 
     # ---------- session ----------
