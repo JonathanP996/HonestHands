@@ -429,7 +429,7 @@ class App:
                  'assignment': asg['name'] if asg else '', 'trigger': 'extension',
                  'text': text[:300],
                  'result': ('blocked' if hard else 'warned') if r.get('level') == 'flag'
-                           else ('ok (disclose)' if r.get('level') == 'note' else 'ok'),
+                           else ('ok (disclose)' if r.get('level') == 'note' else self.guard.revised_or_ok(where)),
                  'source': r.get('source'), 'ms': r.get('ms')}
         if r.get('level') == 'flag':
             entry['reasons'] = r.get('reasons')

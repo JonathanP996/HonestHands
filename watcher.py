@@ -764,7 +764,16 @@ class Guard:
                 CGEventSetIntegerValueField(ev, kCGEventSourceUserData, MARK)
                 CGEventPost(kCGHIDEventTap, ev)
 
+    def revised_or_ok(self, where):
+        pe = getattr(self, 'pending_edit', None)
+        if pe and pe[0] == where and time.time() - pe[1] < 300:
+            self.pending_edit = None
+            return 'ok (revised)'
+        return 'ok'
+
     def record(self, p, cls, asg, trigger, result, r):
+        if result == 'ok':
+            result = self.revised_or_ok(p.get('where'))
         entry = {'t': time.time(), 'where': p['where'], 'class': cls['name'],
                  'assignment': asg['name'] if asg else '', 'trigger': trigger,
                  'text': p['text'][:300], 'result': result}
@@ -792,6 +801,8 @@ class Guard:
 
     def on_panel_choice(self, choice, p):
         # choice: 'edit' or 'send_anyway'
+        if choice == 'edit':
+            self.pending_edit = (p.get('where'), time.time())   # the next clean pass here counts as a revision
         ev = p.get('event')
         if ev is not None:                       # browser-extension path: hand the answer back
             p['choice'] = choice

@@ -252,7 +252,7 @@ function paintHome() {
             <h1>${h(sess.class)}${sess.assignment ? ' <span class="muted" style="font-weight:400">/ '+h(sess.assignment)+'</span>' : ''}</h1>
             <div class="mt"><span class="tag ${sess.policy}">${h(S.policy_labels[sess.policy])}</span></div></div>
           <div class="timer-wrap"><div class="timer-lab">Locked in for</div><div class="timer" id="sessTimer">${fmtDur(sess.elapsed||0)}</div></div>
-          <div class="timer-wrap"><div class="timer-lab">Today</div><div class="figure">${S.stats.today}</div><div class="small muted">${S.stats.flagged} flagged</div></div>
+          <div class="timer-wrap"><div class="timer-lab">Today</div><div class="figure">${S.stats.today}</div><div class="small muted">${S.stats.flagged} flagged · ${S.stats.overridden} overridden</div></div>
         </div>
         <div class="btnrow mt" style="margin-top:20px"><button class="btn ghost" id="end">End session</button></div>
       </div>
@@ -425,9 +425,11 @@ async function paintLog() {
   const rows = pg.rows.map(e => {
     const when = new Date(e.t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     if (e.event) return `<div class="logline"><span class="when">${when}</span><div class="txt muted">— ${h(e.event)}: ${h(e.class||'')} ${h(e.assignment||'')}</div></div>`;
-    const ok = e.result.startsWith('ok'), warned = e.result === 'warned' || e.result === 'sent after warning' || e.result === 'sent anyway';
-    return `<div class="logline"><span class="when">${when}</span><span class="dot ${ok?'':warned?'warn':'bad'}"></span>
-      <div class="txt"><b>${h(e.result)}</b> · ${h(e.where||'')} · ${h(e.class||'')} ${e.assignment?'/ '+h(e.assignment):''}
+    const over = e.result === 'sent anyway' || e.result === 'sent after warning';
+    const ok = e.result.startsWith('ok'), warned = !over && !ok;
+    const label = { 'ok': 'Clean', 'ok (disclose)': 'Clean · disclose AI use', 'ok (revised)': 'Revised, then sent', 'warned': 'Flagged', 'blocked': 'Flagged', 'sent anyway': 'Overridden', 'sent after warning': 'Overridden' }[e.result] || e.result;
+    return `<div class="logline"><span class="when">${when}</span><span class="dot ${ok?'':over?'bad':'warn'}"></span>
+      <div class="txt"><b>${h(label)}</b> · ${h(e.where||'')} · ${h(e.class||'')} ${e.assignment?'/ '+h(e.assignment):''}
       ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
       <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
   }).join('');
@@ -459,6 +461,7 @@ async function paintHistory() {
     <div class="tile mint"><div class="k">Sessions</div><div class="v">${sessions.length}</div><div class="foot">all time</div></div>
     <div class="tile sky"><div class="k">Time locked in</div><div class="v">${fmtLong(totalSec)}</div><div class="foot">studying guarded</div></div>
     <div class="tile sun"><div class="k">Messages checked</div><div class="v">${totalChecks}</div><div class="foot">across sessions</div></div>
+    <div class="tile lav"><div class="k">Overridden</div><div class="v">${sessions.reduce((a,s)=>a+(s.overridden||0),0)}</div><div class="foot">sent despite a warning</div></div>
   </div>`;
   const rows = sessions.map(sdef => {
     const d = new Date(sdef.start*1000);
@@ -466,8 +469,10 @@ async function paintHistory() {
     const day = d.getDate();
     const time = d.toLocaleString([], {hour:'numeric', minute:'2-digit'});
     const dur = sdef.live ? 'in progress' : fmtLong(sdef.seconds);
+    const n = (k, cls, word) => sdef[k] > 0 ? `<span class="badge ${cls}">${sdef[k]} ${word}</span>` : '';
+    const others = n('overridden', 'bad', 'overridden') + n('flagged', 'some', 'flagged') + n('revised', 'fix', 'revised');
     const badge = sdef.live ? '<span class="badge live">● live</span>'
-                 : (sdef.flagged>0 ? `<span class="badge some">${sdef.flagged} flagged</span>` : '<span class="badge">clean</span>');
+                 : `<div class="hbadges">${others}${others ? n('clean', 'ok', 'clean') : '<span class="badge">clean</span>'}</div>`;
     return `<div class="hrow">
       <div class="cal"><div class="m">${mon}</div><div class="d">${day}</div></div>
       <div class="mid"><div class="name">${h(sdef.class)}${sdef.assignment?' <span class="muted">/ '+h(sdef.assignment)+'</span>':''}</div>

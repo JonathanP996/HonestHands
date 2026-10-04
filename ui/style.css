@@ -358,3 +358,9 @@ select.mini{width:auto;padding:6px 10px;font-size:12.5px;border-radius:999px}
 .addtile span{font-size:42px;font-weight:300;line-height:1;transition:transform .35s cubic-bezier(.3,1.4,.4,1)}
 .addtile:hover{border-color:var(--green);color:var(--green);background:color-mix(in srgb,var(--green) 7%,transparent);transform:translateY(-2px)}
 .addtile:hover span{transform:rotate(90deg) scale(1.12)}
+
+/* outcome badges: clean / flagged / revised / overridden */
+.hbadges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
+.hrow .badge.bad{background:var(--stop-bg);color:var(--stop)}
+.hrow .badge.fix{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.hrow .badge.ok{background:var(--panel-2);color:var(--muted)}

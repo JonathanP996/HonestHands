@@ -15,6 +15,23 @@ def _err(e):
     return {'error': str(e)}
 
 
+OVERRIDDEN = ('sent anyway', 'sent after warning')
+RESULT_LABEL = {'ok': 'CLEAN', 'ok (disclose)': 'CLEAN (AI use to disclose)', 'ok (revised)': 'REVISED, THEN SENT',
+                'warned': 'FLAGGED', 'blocked': 'FLAGGED', 'sent anyway': 'OVERRIDDEN (SENT DESPITE WARNING)',
+                'sent after warning': 'OVERRIDDEN (SENT DESPITE WARNING)'}
+
+
+def tally(msgs):
+    """clean / flagged (stopped) / revised (fixed, then passed) / overridden (sent despite a warning)."""
+    res = [m['result'] for m in msgs]
+    over = sum(1 for r in res if r in OVERRIDDEN)
+    warned = sum(1 for r in res if r in ('warned', 'blocked'))
+    return {'clean': sum(1 for r in res if r.startswith('ok') and r != 'ok (revised)'),
+            'revised': sum(1 for r in res if r == 'ok (revised)'),
+            'overridden': over,
+            'flagged': max(0, warned - over)}   # every overridden send was warned first; don't count it twice
+
+
 class Api:
     def __init__(self, app):
         self._app = app
@@ -60,7 +77,7 @@ class Api:
             'engine': self._app.engine.status(),
             'perms': {'accessibility': watcher.has_accessibility(), 'watching': self._app.guard.watching},
             'ext_live': self._app.extension_seen_recently(),
-            'stats': {'today': len(msgs), 'flagged': sum(1 for e in msgs if not e['result'].startswith('ok'))},
+            'stats': dict(tally(msgs), today=len(msgs)),
             'policy_labels': rules.POLICY_LABEL,
         }
 
@@ -305,7 +322,7 @@ class Api:
             a, b = sdef['start'], (sdef['end'] or time.time())
             inwin = [m for m in msgs if a <= m['t'] <= b]
             sdef['checks'] = len(inwin)
-            sdef['flagged'] = sum(1 for m in inwin if not m['result'].startswith('ok'))
+            sdef.update(tally(inwin))
             sdef['seconds'] = int((sdef['end'] or time.time()) - sdef['start'])
             sdef['live'] = sdef['end'] is None
         out.reverse()
@@ -332,16 +349,17 @@ class Api:
         dest = dest[0] if isinstance(dest, (list, tuple)) else dest
         entries = self._store.read_log()
         msgs = [e for e in entries if 'result' in e]
-        flagged = [e for e in msgs if not e['result'].startswith('ok')]
+        t = tally(msgs)
         lines = ['AI Integrity Guard report', f'Generated {datetime.now():%b %d %Y %I:%M %p}',
                  f'{sum(1 for e in entries if e.get("event") == "session start")} study sessions, '
-                 f'{len(msgs)} AI messages, {len(flagged)} flagged', '']
+                 f'{len(msgs)} AI messages: {t["clean"]} clean, {t["flagged"]} flagged (held), '
+                 f'{t["revised"]} revised then sent, {t["overridden"]} overridden (sent despite a warning)', '']
         for e in entries:
             when = datetime.fromtimestamp(e['t']).strftime('%b %d %I:%M %p')
             if 'event' in e:
                 lines.append(f'[{when}] --- {e["event"]}: {e.get("class", "")} {e.get("assignment", "")}')
             else:
-                lines.append(f'[{when}] {e["where"]} | {e["class"]} {e.get("assignment", "")} | {e["result"].upper()}')
+                lines.append(f'[{when}] {e["where"]} | {e["class"]} {e.get("assignment", "")} | {RESULT_LABEL.get(e["result"], e["result"].upper())}')
                 lines.append(f'    "{e["text"]}"')
                 if e.get('reasons'):
                     lines.append('    Why flagged: ' + ' '.join(e['reasons']))
