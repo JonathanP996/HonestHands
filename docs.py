@@ -56,3 +56,31 @@ def relevant_sections(text, max_chars=7000):
         out.append(sentences[i] + ' ')
         prev = i
     return ''.join(out)[:max_chars]
+
+
+def ai_policy_text(text, max_chars=5000):
+    """The parts of a syllabus that govern AI and outside help, in original order, copied as written.
+    Syllabi are short, so this keeps whole runs of sentences around each AI mention (and fills small
+    gaps) rather than isolated lines. Nothing is paraphrased or dropped inside a run."""
+    sentences = [x for x in re.split(r'(?<=[.!?])\s+|\n{2,}', re.sub(r'[ \t]+', ' ', text.replace('\r', ''))) if x.strip()]
+    def pick(terms, before=1, after=2):
+        keep = set()
+        for i, sn in enumerate(sentences):
+            if terms.search(sn):
+                keep.update(range(max(0, i - before), min(len(sentences), i + after + 1)))
+        # fill gaps of up to 3 unselected sentences between selected ones
+        idx = sorted(keep)
+        for a, b in zip(idx, idx[1:]):
+            if 1 < b - a <= 4:
+                keep.update(range(a, b))
+        return keep
+    keep = pick(AI_TERMS)
+    if sum(len(sentences[i]) for i in keep) < 400:
+        keep |= pick(OTHER_TERMS, 1, 2)
+    out, prev, total = [], -2, 0
+    for i in sorted(keep):
+        if total + len(sentences[i]) > max_chars:
+            break
+        out.append(('\n\n...\n\n' if i != prev + 1 and out else (' ' if out else '')) + sentences[i].strip())
+        prev, total = i, total + len(sentences[i])
+    return ''.join(out).strip()

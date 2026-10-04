@@ -219,7 +219,8 @@ class Api:
             a = {'id': new_id()}
             c.setdefault('assignments', []).append(a)
         a.update({'name': name, 'rules': self._clean_rules(draft.get('rules')),
-                  'examples': self._clean_examples(draft.get('examples'))})
+                  'examples': self._clean_examples(draft.get('examples')),
+                  'policy_text': str(draft.get('policy_text', '')).strip()[:3000]})
         if draft.get('source_text'):
             a['source_text'] = draft['source_text']
         self._store.save()

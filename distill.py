@@ -84,65 +84,44 @@ def pick_category(out, rule_list, fallback):
     return cat or fallback
 
 
+CATEGORY_SYSTEM = """Below is the part of a course syllabus that governs students' use of AI tools. Give it a rough label and write a few sample messages.
+
+Return JSON only:
+{"category": "none" | "tutor" | "open",
+ "category_reason": "one short sentence",
+ "examples": [{"prompt": "a message a student might type to an AI chatbot for this class", "verdict": "allow" | "warn" | "block", "why": "short reason"}]}
+
+category is only a rough label: "none" = no AI use at all; "tutor" = AI for explanations, hints, feedback and collaboration but not for producing the student's work; "open" = AI allowed, usually with disclosure or citation.
+examples: 6 messages, 2 allow, 2 warn, 2 block, consistent with the policy."""
+
+
 def analyze(engine, text, kind='class', name=''):
     text = (text or '').strip()
     if len(text) < 20:
         raise ValueError('That looks empty. If it\'s a scanned PDF, copy the text and paste it instead.')
-    policy_guess, evidence = rules.suggest_policy(text)
-    result = {'policy': policy_guess or 'tutor', 'rules': [], 'examples': [], 'dropped': 0,
-              'used_ai': False, 'note': '', 'source_text': text[:20000], 'policy_text': '', 'category_reason': ''}
-
-    if engine.ready():
+    policy_guess, _ = rules.suggest_policy(text)
+    policy_text = docs.ai_policy_text(text, 5000 if kind == 'class' else 2500)
+    result = {'policy': policy_guess or 'tutor', 'rules': [], 'examples': [], 'dropped': 0, 'used_ai': False,
+              'note': '', 'source_text': text[:20000], 'policy_text': policy_text, 'category_reason': ''}
+    if not policy_text:
+        result['note'] = ('No mention of AI or outside help was found in this document. '
+                          'Type or paste the rules into the box if there are any.')
+        return result
+    if kind == 'class' and engine.ready():
         try:
-            if kind == 'class':
-                # Syllabi are short: read the whole thing when it fits, otherwise the AI/integrity parts.
-                if len(text) <= 16000:
-                    body = f'Course: {name}\n\nFull syllabus:\n{text}'
-                else:
-                    body = f'Course: {name}\n\nRelevant parts of the syllabus:\n{docs.relevant_sections(text, 12000)}'
-                out = engine.chat_json(CLASS_SYSTEM, body, timeout=300, max_tokens=2400)
-            else:
-                body = f'Assignment: {name}\n\n{text[:7000]}'
-                out = engine.chat_json(ASG_SYSTEM, body, timeout=300, max_tokens=1200)
-            src = norm(text)
-            for r in (out.get('rules') or [])[:14]:
-                if not isinstance(r, dict):
-                    continue
-                rule, quote = str(r.get('rule', '')).strip(), str(r.get('quote', '')).strip()
-                if not rule:
-                    continue
-                if quote_is_real(quote, src):
-                    t = r.get('type') if r.get('type') in TYPES else guess_type(quote)
-                    result['rules'].append({'type': t, 'rule': rule, 'quote': quote})
-                else:
-                    result['dropped'] += 1
+            out = engine.chat_json(CATEGORY_SYSTEM, f'Course: {name}\n\nSyllabus text:\n{policy_text}',
+                                   timeout=120, max_tokens=900)
+            result['policy'] = pick_category(out, [{'type': 'not_allowed', 'rule': policy_text, 'quote': ''}], result['policy'])
+            result['category_reason'] = str(out.get('category_reason', '')).strip()
             for e in (out.get('examples') or [])[:8]:
                 if isinstance(e, dict) and str(e.get('prompt', '')).strip():
                     v = str(e.get('verdict', 'warn')).lower()
                     result['examples'].append({'prompt': str(e['prompt']).strip(),
                                                'verdict': v if v in ('allow', 'warn', 'block') else 'warn',
                                                'why': str(e.get('why', '')).strip()})
-            if kind == 'class':
-                result['policy'] = pick_category(out, result['rules'], result['policy'])
-                result['category_reason'] = str(out.get('category_reason', '')).strip()
-                ex = out.get('ai_policy_excerpt') or []
-                ex = [ex] if isinstance(ex, str) else ex
-                good = [str(p).strip() for p in ex if quote_is_real(str(p), src)]
-                result['policy_text'] = '\n\n'.join(good)[:3500]
             result['used_ai'] = True
-            if result['dropped']:
-                result['note'] = (f'{result["dropped"]} rule(s) were removed because their quote couldn\'t be found '
-                                  'in your document. Add anything important that\'s missing.')
         except Exception as e:
-            result['note'] = f'The AI couldn\'t finish reading it ({e}). These rules come from a keyword search instead.'
-    else:
-        result['note'] = ('The AI judge isn\'t set up yet, so these rules come from a keyword search. '
-                          'Set up the AI judge in Settings, then use "Re-read document" for better rules.')
-
-    if kind == 'class' and not result['policy_text']:
-        # AI gave no verifiable passage (or isn't ready): use the sentences that mention AI.
-        result['policy_text'] = ' '.join(s.strip() for s in evidence)[:3500]
-    if not result['rules'] and kind == 'class':
-        for s in evidence:
-            result['rules'].append({'type': guess_type(s), 'rule': s.strip(), 'quote': s.strip()})
+            result['note'] = f'The AI couldn\'t label this ({e}); the label is a keyword guess. The rules text is still exact.'
+    elif kind == 'class':
+        result['note'] = 'The AI judge isn\'t set up yet, so the label is a keyword guess. The rules text below is exact.'
     return result

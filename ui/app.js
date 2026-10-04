@@ -290,9 +290,9 @@ function paintHome() {
     <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
   const cls = () => S.classes.find(x => x.id === selC);
   const paintPicks = () => {
-    $('#cg').innerHTML = S.classes.map(c => { const n = (c.rules || []).length, k = (c.assignments || []).length;
+    $('#cg').innerHTML = S.classes.map(c => { const k = (c.assignments || []).length;
       return `<button class="pick ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
-        <span class="nm">${h(c.name)}</span><span class="meta">${n} rule${n === 1 ? '' : 's'} · ${k} assignment${k === 1 ? '' : 's'}</span></button>`; }).join('');
+        <span class="nm">${h(c.name)}</span><span class="meta">${h(S.policy_labels[c.policy] || '')} · ${k} assignment${k === 1 ? '' : 's'}</span></button>`; }).join('');
     const asg = cls().assignments || [];
     if (!asg.some(a => a.id === selA)) selA = '';
     $('#ag').innerHTML = `<button class="${selA === '' ? 'on' : ''}" data-a="">General work</button>` +
@@ -328,7 +328,7 @@ function classCard(c) {
   return `<div class="card"><div class="row" style="align-items:flex-start">
     <div style="flex:1"><h2>${h(c.name)}</h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span></div>
     <button class="x" data-del="${c.id}" title="Delete">×</button></div>
-    <div class="small muted mt">${(c.rules||[]).length} rules · ${(c.assignments||[]).length} assignments</div>
+    <div class="small muted mt">${(c.assignments||[]).length} assignment${(c.assignments||[]).length === 1 ? '' : 's'}</div>
     <div class="btnrow mt"><button class="btn ghost sm" data-edit="${c.id}">Rules</button>
       <button class="btn ghost sm" data-asg="${c.id}">Add assignment</button></div>
     ${(c.assignments||[]).length ? '<div class="small muted mt">'+c.assignments.map(a=>h(a.name)).join(' · ')+'</div>' : ''}</div>`;
@@ -338,7 +338,7 @@ function classCard(c) {
 function openDocFlow(kind, classId) {
   const isClass = kind === 'class';
   const node = el(`<div><h2>${isClass ? 'Add a class' : 'Add an assignment'}</h2>
-    <p class="sub">${isClass ? 'Name the class and give it the syllabus. The AI reads the AI-use rules and shows you each one with the exact line it came from.' : 'Name the assignment and paste or upload it. Rules here apply on top of the class rules.'}</p>
+    <p class="sub">${isClass ? 'Name the class and give it the syllabus. The AI-use parts are pulled out word for word, and the judge reads them for every message.' : 'Name the assignment and paste or upload it. Anything about AI in it applies on top of the class rules.'}</p>
     <div class="field"><label>${isClass ? 'Class name' : 'Assignment name'}</label><input id="dn" placeholder="${isClass ? 'e.g. CS 7641 Machine Learning' : 'e.g. Homework 3'}"></div>
     <div class="field"><label>Document</label><div class="btnrow"><button class="btn ghost sm" id="pick">Choose a file…</button>
       <span class="small muted" id="fn">PDF, Word, or text</span></div></div>
@@ -357,7 +357,7 @@ function openDocFlow(kind, classId) {
     node.querySelector('#go').disabled = true;
     const res = await api().analyze(kind, name, path, text, classId || '', '');
     if (res.error) { node.querySelector('#hint').textContent = res.error; node.querySelector('#go').disabled = false; return; }
-    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: res.rules, examples: res.examples, source_text: res.source_text, policy_text: res.policy_text, category_reason: res.category_reason }, res);
+    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: [], examples: res.examples, source_text: res.source_text, policy_text: res.policy_text, category_reason: res.category_reason }, res);
   };
   modal(node);
 }
@@ -371,33 +371,21 @@ function ruleRow(r, i) {
 
 function reviewDraft(kind, classId, draft, meta) {
   const isClass = kind === 'class';
-  const node = el(`<div><h2>Review the rules for ${h(draft.name)}</h2>
-    <p class="sub">${meta && meta.used_ai ? 'The AI read your document.' : 'Read without the AI judge (keyword search).'} Keep what's right, fix wording, or remove anything that doesn't belong. Every rule shows the line it came from.</p>
+  const node = el(`<div><h2>${isClass ? 'Your professor\'s rules for ' : 'AI rules for '}${h(draft.name)}</h2>
+    <p class="sub">${isClass
+      ? 'This is the part of the syllabus about AI, copied as written. For every message you send, the judge reads it and decides like the professor would: peer-style collaboration, or cheating? Edit it if anything is missing or wrong.'
+      : 'Anything this assignment says about AI or outside help. It applies on top of the class rules.'}</p>
     ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
-    ${isClass ? `<div class="field"><label>What the syllabus says about AI <span class="muted">— the judge reads this for every message</span></label>
-      <textarea id="ptext" rows="5" placeholder="Paste or edit the AI / collaboration part of the syllabus">${h(draft.policy_text || '')}</textarea></div>` : ''}
-    <label>${isClass ? 'What the judge will enforce' : 'Rules'}</label><div id="rules">${draft.rules.map(ruleRow).join('') || '<p class="small muted">No rules found. Add any that matter below.</p>'}</div>
-    <button class="btn ghost sm mt" id="addrule">+ Add a rule</button>
-    ${isClass ? `<div class="mt catline"><span class="muted small">Rough category (just a label):</span>
+    <div class="field"><textarea id="ptext" rows="${isClass ? 13 : 7}" placeholder="Paste or type the AI / collaboration rules here">${h(draft.policy_text || '')}</textarea></div>
+    ${isClass ? `<div class="catline"><span class="muted small">Label:</span>
       <select id="pol" class="mini">${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select>
       ${draft.category_reason ? `<span class="small muted">${h(draft.category_reason)}</span>` : ''}</div>` : ''}
-    <div class="mt"><label>Example checks (help the AI judge)</label>
-      <div class="small muted">${(draft.examples||[]).map(e=>`“${h(e.prompt)}” → <span class="tag ${e.verdict}">${e.verdict}</span>`).join('<br>') || 'none'}</div></div>
     <div class="btnrow mt" style="justify-content:flex-end"><button class="btn ghost" id="cx">Cancel</button>
       <button class="btn" id="save">Save ${isClass ? 'class' : 'assignment'}</button></div></div>`);
-  const rules = JSON.parse(JSON.stringify(draft.rules));
-  const rerender = () => { node.querySelector('#rules').innerHTML = rules.map(ruleRow).join('') || '<p class="small muted">No rules yet.</p>'; wire(); };
-  const wire = () => {
-    node.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { rules.splice(+b.dataset.rm, 1); rerender(); });
-    node.querySelectorAll('[data-k="rule"]').forEach(d => d.oninput = () => rules[+d.dataset.i].rule = d.textContent);
-  };
-  wire();
-  node.querySelector('#addrule').onclick = () => { rules.push({ type: 'not_allowed', rule: '', quote: '' }); rerender();
-    const last = node.querySelectorAll('[data-k="rule"]'); last[last.length-1].focus(); };
   node.querySelector('#cx').onclick = closeModal;
   node.querySelector('#save').onclick = async () => {
-    const payload = { id: draft.id, name: draft.name, rules: rules.filter(r => r.rule.trim()), examples: draft.examples, source_text: draft.source_text };
-    if (isClass) { payload.policy = node.querySelector('#pol').value; payload.policy_text = node.querySelector('#ptext').value; payload.category_reason = draft.category_reason || ''; }
+    const payload = { id: draft.id, name: draft.name, rules: draft.rules || [], examples: draft.examples || [], source_text: draft.source_text, policy_text: node.querySelector('#ptext').value };
+    if (isClass) { payload.policy = node.querySelector('#pol').value; payload.category_reason = draft.category_reason || ''; }
     const r = isClass ? await api().save_class(payload) : await api().save_assignment(classId, payload);
     if (r.error) { toast(r.error); return; } closeModal(); toast('Saved.'); S = r; paint();
   };
@@ -406,7 +394,7 @@ function reviewDraft(kind, classId, draft, meta) {
 
 async function editClass(id) {
   const c = S.classes.find(x => x.id === id);
-  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '', policy_text: c.policy_text || '', category_reason: c.category_reason || '' }, null);
+  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '', policy_text: c.policy_text || (c.rules || []).map(r => r.quote || r.rule).join('\n\n'), category_reason: c.category_reason || '' }, null);
 }
 
 // ---- Activity log ----

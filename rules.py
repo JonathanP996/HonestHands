@@ -23,7 +23,7 @@ LEARNING = re.compile(r'\b(explain|why|how (does|do|did|is|are|can)|help me unde
 
 POLICY_LABEL = {
     'none': 'No AI allowed',
-    'tutor': 'Tutor only: explanations, hints, feedback',
+    'tutor': 'Tutor only',
     'open': 'AI allowed, with disclosure',
 }
 TIPS = {

@@ -6,23 +6,19 @@ import time
 import docs
 import rules
 
-SYSTEM = """You check a message a student is about to send to an AI chatbot while doing schoolwork, against what THIS class's syllabus says about AI.
+SYSTEM = """You are the professor of this course. You wrote the AI policy below and you uphold it. A student is about to send a message to an AI chatbot while working on your class. Decide as you would in real life: are you comfortable with this student sending this message?
 
-The syllabus text and the bullet rules drawn from it are your authority. Read them carefully and apply them literally, whatever the class allows: no AI at all, tutoring only, AI with disclosure, a named exception (like one specific app), or anything else. The "overall category" is only a rough label; never let it override the actual wording. If the syllabus bans AI for the class, any message that uses the AI for this class's coursework breaks it, but a message clearly unrelated to the class does not. If the syllabus says nothing relevant to the message, allow it.
+Think like a professor, not a keyword filter. Ask yourself: does this read like the student collaborating with a peer, tutor, or TA, genuinely trying to learn, understand, or get feedback on their own work? Or does it read like the student outsourcing the work, getting content or answers they would hand in as their own, or getting around what your policy asks of them? Your policy, exactly as written, is the standard, whatever it permits or forbids: no AI at all, tutoring only, collaboration treated like working with a classmate, a named exception, disclosure rules, "don't copy from the chat," "don't use AI inside your editor," and so on. Where the policy is permissive, don't flag ordinary learning questions. Where it forbids something, flag messages that ask for it. If the policy doesn't speak to the message and nothing about it looks like cheating, allow it. If the message is clearly unrelated to schoolwork, allow it.
 
-Verdicts:
-- "allow": the message follows the rules. Whether explaining, hints, feedback, brainstorming, formatting, translating, or writing are okay depends entirely on what this syllabus allows.
-- "warn": the message might break a rule, or you are not sure.
-- "block": the message clearly breaks a rule in the syllabus (for example, it asks for something a bullet specifically forbids).
+Verdicts: "allow" (you're comfortable), "warn" (you're not sure, or it's borderline), "block" (clearly outside what you'd accept).
+Judge what the message asks the AI to DO, not its topic: "help me understand X" differs from "write X for me."
+An assignment's own notes can add rules for that assignment; "assignment rules override class rules" is never itself a rule.
 
-Judge what the message asks the AI to DO, not its topic. "How do I…" is different from "do it for me."
-Assignment rules override class rules, but "assignment rules override class rules" is NOT itself a rule — never report that as the rule.
-
-When you warn or block, be specific and personal:
-- "reason": one sentence saying what THIS message is asking for, naming the actual thing (e.g. "This asks Gemini to convert your answer into LaTeX formatting.").
-- "rule": the specific rule from the list that it breaks, in plain words (e.g. "No AI for formatting or LaTeX"). Use a real rule from the lists, not a generic phrase. Empty only if nothing specific applies.
-- "quote": the exact words from the rule list's quotes that back this up, copied verbatim, or empty if there is none.
-- "suggestion": one short, concrete alternative the student could ask instead, specific to what they wanted.
+When you warn or block, answer in a professor's voice, specific to THIS message:
+- "reason": one sentence on what the message is asking for and why you're not comfortable.
+- "rule": the part of your policy it conflicts with, in plain words. Empty only if nothing specific applies.
+- "quote": the exact words from your policy that back this up, copied verbatim, or empty.
+- "suggestion": one short, concrete thing the student could ask instead.
 
 Reply with JSON only:
 {"verdict":"allow"|"warn"|"block","reason":"...","rule":"...","quote":"...","suggestion":"..."}"""
@@ -59,23 +55,26 @@ def _rules_text(items):
 def build_prompt(text, cls, asg, where):
     policy_text = (cls.get('policy_text') or '').strip()
     if not policy_text and cls.get('source_text'):
-        policy_text = docs.relevant_sections(cls['source_text'], 3000)
-    parts = [f'Class: {cls["name"]}']
+        policy_text = docs.ai_policy_text(cls['source_text'], 3500)
+    parts = [f'Course: {cls["name"]}']
     if policy_text:
-        parts += ['What the syllabus says about AI and outside help (verbatim):', '<<<', policy_text[:3500], '>>>']
-    parts += [f'Rough category (label only): {rules.POLICY_LABEL.get(cls.get("policy"), "")}',
-              'Bullet rules from the syllabus:', _rules_text(cls.get('rules'))]
+        parts += ['YOUR AI POLICY (from your syllabus, word for word):', '<<<', policy_text[:4500], '>>>']
+    elif cls.get('rules'):
+        parts += ['YOUR AI POLICY (notes):', _rules_text(cls.get('rules'))]
+    else:
+        parts += ['YOUR AI POLICY: the syllabus does not say anything about AI. Allow unless the message is plainly cheating.']
+    parts += [f'(Rough label for this policy, not the rule itself: {rules.POLICY_LABEL.get(cls.get("policy"), "")})']
     if asg:
-        parts += ['', f'Current assignment: {asg["name"]}', 'Assignment rules:', _rules_text(asg.get('rules'))]
+        parts += ['', f'Current assignment: {asg["name"]}']
+        ap = (asg.get('policy_text') or '').strip()
+        if ap:
+            parts += ['What this assignment says about AI or outside help:', '<<<', ap[:2500], '>>>']
+        elif asg.get('rules'):
+            parts += ['Notes for this assignment:', _rules_text(asg.get('rules'))]
         src = (asg.get('source_text') or '').strip()
         if src:
-            parts += ['Assignment text (pasting these questions to get answers is usually not allowed unless the syllabus says so):',
+            parts += ['Assignment text (pasting these questions to get answers is usually not okay unless your policy says so):',
                       src[:2000]]
-    examples = (cls.get('examples') or []) + ((asg or {}).get('examples') or [])
-    if examples:
-        parts += ['', 'Examples for this class:']
-        parts += [f'- "{e["prompt"]}" -> {e["verdict"]}' + (f' ({e["why"]})' if e.get('why') else '')
-                  for e in examples[:10]]
     parts += ['', f'Where the student is typing: {where}', 'Student message:', '<<<', text[:4000], '>>>']
     return '\n'.join(parts)
 
