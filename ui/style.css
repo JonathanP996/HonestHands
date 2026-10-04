@@ -325,3 +325,29 @@ select.mini{width:auto;padding:6px 10px;font-size:12.5px;border-radius:999px}
   #rail,#rail .logo,.railbtn .label{transition:none!important}
   #rail:hover::after,#rail:hover .railbtn .ico{animation:none!important}
 }
+
+/* ---------- full-pastel class cards + square study-session boxes ---------- */
+.cc-lav{--cl:#e4d9f8}.cc-mint{--cl:#d2edd9}.cc-sun{--cl:#f8ecc2}.cc-sky{--cl:#d6e4fb}
+.cc-rose{--cl:#f8d8de}.cc-peach{--cl:#f9deca}.cc-sage{--cl:#dfeac7}.cc-sand{--cl:#ece3d3}
+.cc-ink{--cl:#0c0d10}
+
+/* Classes page: the whole card is the class color */
+.card.cc.full{background:var(--cl);border-color:transparent;color:#171a21;padding-top:22px}
+.card.cc.full h2,.card.cc.full b{color:#171a21}
+.card.cc.full .muted,.card.cc.full .small{color:rgba(23,26,33,.62)}
+.card.cc.full .cdot{background:#171a21;box-shadow:0 0 0 2px rgba(23,26,33,.15)}
+.card.cc.full .tag{background:rgba(255,255,255,.65);color:#171a21}
+.card.cc.full .btn.ghost{background:rgba(255,255,255,.6);color:#171a21;border-color:transparent}
+.card.cc.full .btn.ghost:hover{background:rgba(255,255,255,.9)}
+.card.cc.full .x{color:rgba(23,26,33,.55)}.card.cc.full .x:hover{color:#171a21}
+
+/* Study session: bigger, squarer boxes in the full class color */
+.classgrid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.pick{background:var(--cl,#e4d9f8);color:#171a21;aspect-ratio:1/1;min-height:0;padding:22px;border-radius:26px}
+.pick .nm{font-size:24px;line-height:1.15}
+.pick .meta{font-size:13px;color:rgba(23,26,33,.66);opacity:1}
+.pick .tick{top:16px;right:16px;width:26px;height:26px;font-size:15px}
+.pick.tutor{background:#0c0d10;color:#fff}
+.pick.tutor .meta{color:rgba(255,255,255,.7)}
+.pick.on{border-color:#171a21;box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 28%,transparent)}
+.pick.tutor.on{border-color:#fff}
