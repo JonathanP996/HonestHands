@@ -451,7 +451,7 @@ class App:
                     'reason': r.get('reason', ''), 'rule': r.get('rule', ''),
                     'quote': r.get('quote', ''), 'tip': r.get('tip', ''), 'hard': hard}
         if hook is not None:
-            AppHelper.callAfter(hook.hide)
+            AppHelper.callAfter(hook.ok)
         return {'verdict': 'allow'}
 
     def run(self):

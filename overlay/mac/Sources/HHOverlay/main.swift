@@ -34,6 +34,7 @@ final class OverlayModel: ObservableObject {
     @Published var cmd = ShowCommand(cmd: "show")
     @Published var pulse = 0          // bumps each show() to restart ripples
     @Published var checking = false
+    @Published var okPill = false
     var onChoice: (String) -> Void = { _ in }
 }
 
@@ -114,6 +115,18 @@ struct CardView: View {
                 .padding(.horizontal, 15).padding(.vertical, 10)
                 .background(Capsule().fill(.ultraThinMaterial)
                     .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.3), radius: 14, y: 6))
+                .padding(24)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+            if m.okPill && !m.visible && !m.checking {
+                HStack(spacing: 9) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 15)).foregroundStyle(green)
+                    Text("You’re good, sending it").font(.system(size: 12.5, weight: .medium))
+                }
+                .padding(.horizontal, 15).padding(.vertical, 10)
+                .background(Capsule().fill(.ultraThinMaterial)
+                    .overlay(Capsule().strokeBorder(green.opacity(0.5), lineWidth: 1))
                     .shadow(color: .black.opacity(0.3), radius: 14, y: 6))
                 .padding(24)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -288,12 +301,26 @@ final class Controller {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: w)
     }
 
+    func showOK() {
+        checkWork?.cancel()
+        guard model.checking, !model.visible else { return }     // instant results show nothing
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { model.checking = false; model.okPill = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            guard let self else { return }
+            withAnimation(.easeIn(duration: 0.25)) { self.model.okPill = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if !self.model.visible && !self.model.checking && !self.model.okPill { self.panel.orderOut(nil) }
+            }
+        }
+    }
+
     func stopChecking() {
         checkWork?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { model.checking = false }
     }
 
     func show(_ c: ShowCommand) {
+        model.okPill = false
         stopChecking()
         currentId = c.id ?? ""
         model.cmd = c
@@ -316,7 +343,7 @@ final class Controller {
         stopChecking()
         withAnimation(.easeIn(duration: 0.25)) { model.visible = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            if self?.model.visible == false && self?.model.checking == false { self?.panel.orderOut(nil) }
+            if self?.model.visible == false && self?.model.checking == false && self?.model.okPill == false { self?.panel.orderOut(nil) }
         }
     }
 }
@@ -336,6 +363,7 @@ DispatchQueue.global().async {
             switch cmd.cmd {
             case "show": controller.show(cmd)
             case "checking": controller.startChecking()
+            case "ok": controller.showOK()
             case "hide": controller.dismiss()
             case "choose":
                 let c = cmd.choice ?? "edit"

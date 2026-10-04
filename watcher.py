@@ -604,7 +604,7 @@ class Guard:
             if not cls:
                 return event
             hook = Guard.overlay_hook
-            if self.locked and hook is not None and hook.is_open():
+            if hook is not None and hook.is_open():     # a warning is on screen (either path)
                 if etype == kCGEventLeftMouseDown:
                     pt = CGEventGetLocation(event)
                     if hook.owns_point(pt.x, pt.y):
@@ -713,7 +713,7 @@ class Guard:
         dbg(f'timing: click/enter -> verdict {int((time.time() - getattr(self, "_t_start", time.time())) * 1000)} ms total (judge {r.get("ms")} ms)')
         dbg('_finish: level=', r['level'], 'verdict=', r.get('verdict'))
         if r['level'] in ('ok', 'note') and Guard.overlay_hook is not None:
-            Guard.overlay_hook.hide()
+            Guard.overlay_hook.ok()
         if r['level'] not in ('ok', 'note'):
             # Flagged: show the warning (stays locked until the dialog is closed).
             hard = self.is_hard(r)
@@ -812,7 +812,7 @@ class Guard:
             return
         self._release()
 
-    SEND_WORDS = re.compile(r'\b(send|submit|ask|run|go|enter|generate|prompt|message|search)\b', re.I)
+    SEND_WORDS = re.compile(r'\b(send|submit|run|generate)\b', re.I)   # narrow on purpose: 'message', 'go', 'ask' matched unrelated buttons
     SEND_GLYPHS = ('\u2191', '\u2197', '\u27a4', '\u2b06', '\u279c', '\u25b6', '\u21e7', '\u2b95')  # arrows/paper-plane-ish
 
     def click_is_send(self, event):
