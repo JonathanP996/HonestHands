@@ -246,7 +246,7 @@ async function finishOnboarding() {
 function paintHome() {
   const m = $('#main'); const sess = S.session;
   if (sess) {
-    const st = S.stats;
+    const st = sess.stats || {};
     m.innerHTML = `<div class="wrap sb-wrap">${permBanner()}${engineBanner()}
       <div class="sessbig cc-${sess.color || 'lav'}" id="sessbig">
         <div class="sb-top sb-in" style="--i:0"><span class="sb-live"><i></i>Guarding now</span>
@@ -268,6 +268,14 @@ function paintHome() {
       </div>
       <p class="small muted center" style="margin-top:14px">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
     countTo($('#sb-n-today'), st.clean || 0, { dur: 900 }); countTo($('#sb-n-flag'), st.flagged || 0, { dur: 900 }); countTo($('#sb-n-over'), st.overridden || 0, { dur: 900 });
+    clearInterval(window.SESS_POLL);
+    window.SESS_POLL = setInterval(async () => {           // keep this session's numbers live
+      if (TAB !== 'home' || !document.getElementById('sessbig')) { clearInterval(window.SESS_POLL); return; }
+      const ns = await api().state();
+      if (!ns.session) { S = ns; paint(); return; }
+      S = ns; const t = ns.session.stats || {};
+      countTo($('#sb-n-today'), t.clean || 0, { dur: 600 }); countTo($('#sb-n-flag'), t.flagged || 0, { dur: 600 }); countTo($('#sb-n-over'), t.overridden || 0, { dur: 600 });
+    }, 3000);
     startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
     $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
       const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };

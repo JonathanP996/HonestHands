@@ -97,7 +97,9 @@ class Api:
             ccolor = cls.get('color') if cls.get('color') in COLORS + ['ink'] else COLORS[0]
             sess = {'class_id': cls['id'], 'class': cls['name'], 'policy': cls.get('policy'), 'color': ccolor,
                     'assignment_id': asg['id'] if asg else None, 'assignment': asg['name'] if asg else '',
-                    'started': started, 'elapsed': int(time.time() - started) if started else 0}
+                    'started': started, 'elapsed': int(time.time() - started) if started else 0,
+                    # counts for THIS session only (everything logged since it started)
+                    'stats': tally([e for e in s.read_log() if 'result' in e and e['t'] >= (started or 0)])}
         return {
             'classes': classes,
             'tutor_mode': {k: v for k, v in TUTOR_CLASS.items() if k != 'policy_text'},
