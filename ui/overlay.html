@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --card:#16181d; --ink:#f3f1ea; --muted:#9aa0ab; --line:#2a2e36;
+    --brass:#c6a24c; --brass-2:#e0c47e; --stop:#e0776e; --green:#6fc0a6;
+    --lav:#ece7f6; --mint:#e2f0e6;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --card:#fffdf8; --ink:#1c2029; --muted:#6c7280; --line:#e7e3d8; }
+  }
+  *{margin:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+  html,body{background:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;height:100%}
+  #wrap{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:14px}
+  /* the pill/card morphs from a small bar up into a full card */
+  #card{
+    width:100%;max-width:480px;background:var(--card);border:1px solid var(--line);
+    border-radius:22px;box-shadow:0 24px 70px -18px rgba(0,0,0,.65), 0 2px 10px rgba(0,0,0,.25);
+    overflow:hidden;transform:translateY(130%) scale(.96);opacity:0;
+    transition:transform .5s cubic-bezier(.17,.84,.26,1), opacity .35s ease;
+  }
+  #card.in{transform:translateY(0) scale(1);opacity:1}
+  #card.out{transform:translateY(130%) scale(.96);opacity:0}
+  .bar{height:5px;background:linear-gradient(90deg,var(--brass),var(--brass-2));background-size:200% 100%;animation:sh 2.4s linear infinite}
+  #card.hard .bar{background:linear-gradient(90deg,#8f2f2a,var(--stop))}
+  @keyframes sh{to{background-position:-200% 0}}
+  .pad{padding:18px 20px 6px}
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:3px}
+  .ico{width:30px;height:30px;border-radius:10px;flex:none;display:grid;place-items:center;
+    background:var(--mint);color:#1f6d55;font-weight:800}
+  #card.hard .ico{background:#f6e3e1;color:#8f2f2a}
+  h1{font-family:"Optima","Candara",sans-serif;font-size:19px;letter-spacing:.2px}
+  .ctx{color:var(--muted);font-size:12px;margin:0 0 10px 40px}
+  .why{font-size:14px;line-height:1.5}
+  .line{font-size:13px;line-height:1.5;margin-top:6px}
+  .line .lab{color:var(--muted);font-weight:600}
+  .quote{font-family:"Didot","Hoefler Text",Georgia,serif;font-style:italic;color:var(--muted);font-size:13px;
+    border-left:2px solid color-mix(in srgb,var(--brass) 55%,var(--line));padding-left:10px;margin-top:8px}
+  .tip{color:var(--brass);font-size:13px;line-height:1.5;margin-top:9px}
+  .foot{color:var(--muted);font-size:11px;margin-top:11px}
+  .row{display:flex;gap:10px;padding:14px 20px 18px}
+  button{flex:1;font-family:inherit;font-size:14px;font-weight:600;padding:11px 14px;border-radius:13px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--ink);transition:transform .1s, filter .15s, background .15s}
+  button:hover{background:color-mix(in srgb,var(--line) 45%, transparent)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--green);color:#08140f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.07)}
+  button.warn{color:var(--brass)}
+  .stagger{opacity:0;transform:translateY(6px);animation:rise .42s ease forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="card"><div class="bar"></div><div class="pad" id="pad"></div><div class="row" id="row"></div></div></div>
+<script>
+function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function showBlock(p){
+  const card=document.getElementById('card');
+  card.className = p.hard ? 'hard':'';
+  let i=0; const d=()=>`style="animation-delay:${(i++)*55}ms"`;
+  const pad=document.getElementById('pad');
+  let html = `<div class="head stagger" ${d()}><div class="ico">✋</div><h1>${p.hard?'Message blocked':'Hold on a second'}</h1></div>`;
+  html += `<div class="ctx stagger" ${d()}>${esc(p.class)}${p.assignment?' / '+esc(p.assignment):''} · ${esc(p.where)}</div>`;
+  html += `<div class="why stagger" ${d()}>${esc(p.reason)}</div>`;
+  if(p.rule)  html += `<div class="line stagger" ${d()}><span class="lab">Rule:</span> ${esc(p.rule)}</div>`;
+  if(p.quote) html += `<div class="quote stagger" ${d()}>“${esc(p.quote)}”</div>`;
+  if(p.tip)   html += `<div class="tip stagger" ${d()}>Try instead: ${esc(p.tip)}</div>`;
+  html += `<div class="foot stagger" ${d()}>Checked by the ${esc(p.source)}.</div>`;
+  pad.innerHTML = html;
+  const row=document.getElementById('row');
+  if(p.hard){
+    row.innerHTML = `<button class="primary" onclick="choose('edit')">OK, I'll edit it</button>`;
+  } else {
+    row.innerHTML = `<button onclick="choose('edit')">Edit my message</button>
+      <button class="primary warn" onclick="choose('send_anyway')">Send anyway</button>`;
+  }
+  card.classList.remove('out','in'); void card.offsetWidth; card.classList.add('in');
+}
+function choose(c){
+  const card=document.getElementById('card');
+  card.classList.remove('in'); card.classList.add('out');
+  setTimeout(()=>{ try{ window.pywebview.api.choose(c); }catch(e){} }, 300);
+}
+window.addEventListener('keydown', e=>{ if(e.key==='Escape') choose('edit'); });
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.buildenv/
+*.egg-info/
+
+# Build output
+build/
+dist/
+*.dmg
+*.app/
+icon.iconset/
+icon.icns
+
+# macOS
+.DS_Store
+
+# App data / downloaded models should never be committed
+*.gguf
+models/
+
+# Logs
+*.log
+
+overlay/mac/.build/
+overlay/bin/

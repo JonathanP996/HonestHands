@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "HonestHands Guard",
+  "version": "1.0.0",
+  "description": "Works with the HonestHands desktop app to keep AI use honest. Does nothing unless the app is running and a study session is active.",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:7673/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://claude.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*",
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://www.meta.ai/*",
+        "https://meta.ai/*",
+        "https://poe.com/*",
+        "https://chat.mistral.ai/*",
+        "https://you.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  }
+}

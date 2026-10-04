@@ -1,0 +1,560 @@
+// ---- talk to the Python side ----
+const api = () => window.pywebview.api;
+const h = (s) => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $ = (sel, el = document) => el.querySelector(sel);
+const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+let S = null, TAB = 'home';
+function fmtDur(sec){ sec=Math.max(0,sec|0); const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
+  return (h>0? h+':'+String(m).padStart(2,'0') : m) + ':' + String(s).padStart(2,'0'); }
+function fmtLong(sec){ sec=Math.max(0,sec|0); const h=Math.floor(sec/3600), m=Math.round(sec%3600/60);
+  return h>0 ? (h+'h '+m+'m') : (m+'m'); }
+let TIMER = null, TIMER_BASE = 0, TIMER_T0 = 0;
+function startTimerTick(startedEpoch){
+  stopTimerTick();
+  TIMER = setInterval(()=>{ const el=document.getElementById('sessTimer');
+    if(!el){ return; }
+    const sec = Math.floor(Date.now()/1000 - startedEpoch);
+    el.textContent = fmtDur(sec);
+  }, 1000);
+}
+function stopTimerTick(){ if(TIMER){ clearInterval(TIMER); TIMER=null; } }
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(t._h); t._h = setTimeout(() => t.hidden = true, 3200);
+}
+window.showToast = toast;
+function modal(node) { $('#sheetBody').innerHTML = ''; $('#sheetBody').append(node); $('#modal').hidden = false; }
+function closeModal() { $('#modal').hidden = true; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+async function askPin(reason) {
+  if (!S || !S.has_pin) return '';
+  return new Promise(resolve => {
+    const node = el(`<div><h2>Accountability PIN</h2><p class="sub">${h(reason)}</p>
+      <div class="field"><input type="password" inputmode="numeric" id="pinIn" autofocus></div>
+      <p class="small" style="color:var(--stop)" id="pinErr"></p>
+      <div class="btnrow" style="justify-content:flex-end"><button class="btn ghost" id="pc">Cancel</button><button class="btn" id="pk">Unlock</button></div></div>`);
+    node.querySelector('#pc').onclick = () => { closeModal(); resolve(null); };
+    node.querySelector('#pk').onclick = () => { const v = node.querySelector('#pinIn').value; closeModal(); resolve(v); };
+    node.querySelector('#pinIn').onkeydown = e => { if (e.key === 'Enter') node.querySelector('#pk').click(); };
+    modal(node);
+  });
+}
+
+async function refresh() { S = await api().state(); paint(); }
+
+// ---- top-level paint ----
+const TAB_META = {
+  home:      { title: 'Study session', crumb: 'HonestHands' },
+  classes:   { title: 'Classes',       crumb: 'Your courses' },
+  log:       { title: 'Activity',      crumb: 'What the guard has checked' },
+  community: { title: 'Community',      crumb: 'HonestHands' },
+  history:   { title: 'History',        crumb: 'Your study sessions' },
+  settings:  { title: 'Settings',      crumb: 'HonestHands' },
+};
+function engineChipHTML() {
+  const e = S.engine;
+  const names = { builtin: 'Built-in AI', ollama: 'Ollama', keywords: 'Keyword rules' };
+  if (e.backend === 'keywords') return `<span class="chip">Keyword rules</span>`;
+  if (e.ready) return `<span class="chip good"><span class="d"></span>${names[e.backend]} ready</span>`;
+  if (e.state === 'downloading' || e.state === 'starting') return `<span class="chip warn"><span class="spin"></span> ${names[e.backend]}…</span>`;
+  return `<span class="chip warn"><span class="d"></span>${names[e.backend]} not ready</span>`;
+}
+function extChipHTML() {
+  if (S.ext_live) return `<span class="chip good"><span class="d"></span>Extension on</span>`;
+  return `<span class="chip warn"><span class="d"></span>Extension off</span>`;
+}
+function paint() {
+  stopTimerTick();
+  const rail = document.getElementById('rail');
+  if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.visibility='hidden'; paintOnboarding(); return; }
+  rail.style.visibility = 'visible'; document.getElementById('topbar').style.visibility='visible';
+  document.querySelectorAll('#rail .railbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === TAB));
+  const meta = TAB_META[TAB] || TAB_META.home;
+  const sess = S.session;
+  $('#pageTitle').textContent = meta.title;
+  $('#crumb').textContent = (TAB === 'home' && sess) ? ('Guarding · ' + sess.class) : meta.crumb;
+  // chips: session state + engine
+  let chips = '';
+  if (sess) chips += `<span class="chip live"><span class="d"></span>Session active</span>`;
+  if (sess) chips += extChipHTML();
+  chips += engineChipHTML();
+  $('#chips').innerHTML = chips;
+  ({ home: paintHome, classes: paintClasses, log: paintLog, history: paintHistory, community: paintCommunity, settings: paintSettings }[TAB])();
+  const m = document.getElementById('main'); m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter');
+}
+document.querySelectorAll('#rail .railbtn[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; paint(); });
+
+function engineBanner() {
+  const e = S.engine;
+  if (e.backend === 'keywords') return '';
+  if (e.ready) return '';
+  if (e.state === 'needs_setup')
+    return `<div class="banner warn"><div><b>The AI judge needs a one-time setup.</b><div class="small">Until then, checking uses keyword rules only. Set it up in Settings.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
+  if (e.state === 'downloading' || e.state === 'starting') {
+    let bar = '';
+    if (e.progress && e.progress.total) { const pct = Math.round(100 * e.progress.done / e.progress.total);
+      bar = `<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${e.progress.label}: ${pct}% of ${(e.progress.total/1e9).toFixed(1)} GB</div>`; }
+    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message||'Preparing the AI judge…')}</b>${bar}</div></div>`;
+  }
+  if (e.state === 'error') return `<div class="banner warn"><div><b>AI judge problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. See Settings.</div></div></div>`;
+  return '';
+}
+
+function permBanner() {
+  if (S.perms.accessibility && S.perms.watching) return '';
+  return `<div class="banner warn"><div><b>Accessibility permission needed.</b>
+    <div class="small">The guard can't read or hold your messages until you turn on AI Integrity Guard under Accessibility, then reopen the app.</div></div>
+    <button class="btn sm" onclick="api().open_accessibility_settings()">Open settings</button></div>`;
+}
+
+
+// ---- Onboarding ----
+let ONB = 0;
+let lastOnbSig = '';
+function onbStructSig() {
+  const e = S.engine;
+  return [ONB, S.classes.length, e.backend, e.model, e.state, e.ready].join('|');
+}
+function paintOnboarding(animate = true) {
+  const m = document.getElementById('main');
+  const steps = [welcomeStep, judgeStep, extensionStep, firstClassStep];
+  m.innerHTML = `<div class="wrap onb">${steps[Math.min(ONB, steps.length-1)]()}</div>`;
+  if (animate) { m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter'); }
+  wireOnboarding();
+  lastOnbSig = onbStructSig();
+}
+// Update just the download status/progress without rebuilding the screen (no flicker).
+function updateOnbStatus() {
+  const box = document.querySelector('.onb-status');
+  if (box) box.innerHTML = judgeStatusHTML();
+}
+function dots(i){ return `<div class="onb-dots">${[0,1,2,3].map(n=>`<span class="${n===i?'on':''}"></span>`).join('')}</div>`; }
+
+function welcomeStep() {
+  return `<div class="onb-hero center">
+    <div class="onb-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 11V5.5a1.3 1.3 0 0 1 2.6 0V10"/><path d="M10.6 10V4.4a1.3 1.3 0 0 1 2.6 0V10"/>
+      <path d="M13.2 10.2V5.4a1.3 1.3 0 0 1 2.6 0V12"/>
+      <path d="M15.8 12V8.6a1.3 1.3 0 0 1 2.5 0c0 3.2.1 4.4-.6 6.3-.8 2.2-2.4 3.6-4.8 3.6-2 0-3.2-.5-4.4-1.9l-2.7-3.2a1.35 1.35 0 0 1 1.9-1.9L7 11"/></svg></div>
+    <h1 class="onb-title">Welcome to HonestHands</h1>
+    <p class="onb-verse">“Let the thief no longer steal, but rather let him labor, doing honest work with his own hands, so that he may have something to share with anyone in need.”<br><span class="ref">Ephesians 4:28</span></p>
+    <p class="onb-lead">HonestHands checks what you’re about to send to an AI against your class’s own rules, and warns you before you cross a line — so AI stays a tutor, not a shortcut. Everything runs on your Mac.</p>
+    <div class="btnrow center-row"><button class="btn" id="o-next">Get started</button></div>
+    ${dots(0)}</div>`;
+}
+function judgeStatusHTML() {
+  const e = S.engine;
+  if (e.backend === 'keywords') return `<p class="small muted">You’re on keyword rules — no download, but less nuanced. You can switch to the AI judge anytime in Settings.</p>`;
+  if (e.ready) return `<p class="small" style="color:var(--ok)">✓ The AI judge is ready.</p>`;
+  if (e.state === 'downloading' || e.state === 'starting') {
+    const pct = e.progress && e.progress.total ? Math.round(100*e.progress.done/e.progress.total) : 0;
+    const of = e.progress && e.progress.total ? ` · ${(e.progress.done/1e9).toFixed(1)} of ${(e.progress.total/1e9).toFixed(1)} GB` : '';
+    return `<p class="small"><span class="spin"></span> ${h(e.message||'Preparing…')}${of}</p><div class="progress"><div style="width:${pct}%"></div></div>`;
+  }
+  if (e.state === 'error') return `<p class="small" style="color:var(--stop)">${h(e.message)}</p>`;
+  return `<p class="small muted">${h(e.message||'The AI judge needs a one-time setup.')}</p>`;
+}
+function judgeStep() {
+  const e = S.engine;
+  const ready = e.ready;
+  const status = judgeStatusHTML();
+  return `<div class="onb-card">
+    <h1 class="onb-title">Choose your judge</h1>
+    <p class="onb-lead">This is what decides whether a message is OK. The built-in AI runs privately on your Mac after a one-time download. On your machine, the larger model is a great fit.</p>
+    <div class="field"><label>Judge</label><select id="o-be">
+      <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — private, runs on this Mac</option>
+      <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
+      <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no download</option>
+    </select></div>
+    <div class="field" id="o-mf" ${e.backend==='builtin'?'':'hidden'}><label>Model size</label><select id="o-mdl">
+      ${Object.entries(e.models).map(([k,v])=>`<option value="${k}" ${e.model===k?'selected':''}>${h(v)}</option>`).join('')}</select></div>
+    <div class="btnrow"><button class="btn ghost sm" id="o-apply">Download &amp; set up</button></div>
+    <div class="onb-status">${status}</div>
+    <div class="btnrow center-row mt"><button class="btn ghost" id="o-back">Back</button>
+      <button class="btn" id="o-next">${ready||e.backend==='keywords'?'Continue':'Continue anyway'}</button></div>
+    ${dots(1)}</div>`;
+}
+function extensionStep() {
+  const ext = S.extension || {browsers:[], installed_dir:''};
+  const ready = !!ext.installed_dir;
+  const browsers = ext.browsers||[];
+  return `<div class="onb-card">
+    <h1 class="onb-title">Install the browser guard</h1>
+    <p class="onb-lead">AI websites like Gemini hide their send button from the Mac. A small companion extension closes that gap. It only works while HonestHands is running and a session is active — it never watches anything otherwise. This step is required for website coverage.</p>
+    <div class="btnrow"><button class="btn" id="o-extprep">${ready?'Re-copy files':'Set up the extension'}</button>
+      ${ready?'<button class="btn ghost" id="o-extopen">Open folder</button>':''}</div>
+    <div class="onb-status" id="o-extstatus"></div>
+    ${ready?`<div class="step-note mt"><b>Enable it once in your browser:</b><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Open Extensions ${browsers.length?'('+browsers.map(h).join(', ')+')':''}</li><li>Turn on <b>Developer mode</b></li><li><b>Load unpacked</b> → choose the folder</li></ol></div><div class="btnrow mt">`+browsers.filter(b=>['Google Chrome','Microsoft Edge','Brave'].includes(b)).map(b=>`<button class="btn ghost sm" data-obrowser="${h(b)}">Open ${h(b)}</button>`).join('')+`</div>`:''}
+    <div class="btnrow center-row mt"><button class="btn ghost" id="o-back">Back</button>
+      <button class="btn" id="o-next">${ready?'I\u2019ve enabled it — continue':'Continue'}</button></div>
+    ${dots(2)}</div>`;
+}
+function firstClassStep() {
+  const has = S.classes.length>0;
+  return `<div class="onb-card center">
+    <h1 class="onb-title">Add your first class</h1>
+    <p class="onb-lead">Give HonestHands a syllabus and it learns that class’s AI rules — what’s allowed, what isn’t — straight from the document, with the exact lines quoted back to you.</p>
+    ${has ? `<p class="small" style="color:var(--ok)">✓ ${h(S.classes[0].name)} added${S.classes.length>1?` and ${S.classes.length-1} more`:''}.</p>` : ''}
+    <div class="btnrow center-row"><button class="btn" id="o-add">${has?'Add another':'Add a class'}</button>
+      ${has?`<button class="btn" id="o-done">Finish</button>`:`<button class="btn ghost" id="o-later">I’ll do this later</button>`}</div>
+    <button class="btn ghost sm" id="o-back" style="margin-top:14px">Back</button>
+    ${dots(3)}</div>`;
+}
+
+function wireOnboarding() {
+  const next = document.getElementById('o-next');
+  if (next) next.onclick = () => { ONB++; paintOnboarding(); };
+  const back = document.getElementById('o-back');
+  if (back) back.onclick = () => { ONB = Math.max(0, ONB-1); paintOnboarding(); };
+  const skip = document.getElementById('o-skip');
+  if (skip) skip.onclick = finishOnboarding;
+  const later = document.getElementById('o-later');
+  if (later) later.onclick = finishOnboarding;
+  const done = document.getElementById('o-done');
+  if (done) done.onclick = finishOnboarding;
+
+  const be = document.getElementById('o-be');
+  if (be) be.onchange = () => { document.getElementById('o-mf').hidden = be.value !== 'builtin'; };
+  const apply = document.getElementById('o-apply');
+  if (apply) apply.onclick = async () => { apply.disabled = true;
+    const r = await api().set_engine(be.value, (document.getElementById('o-mdl')||{}).value||'small', '');
+    if (r.error) toast(r.error); else { S = r; paintOnboarding(); } };
+
+  const add = document.getElementById('o-add');
+  if (add) add.onclick = () => openDocFlow('class');
+
+  const extprep = document.getElementById('o-extprep');
+  if (extprep) extprep.onclick = async ()=>{ extprep.disabled=true;
+    const st=document.getElementById('o-extstatus'); if(st) st.innerHTML='<span class="spin"></span> Copying files…';
+    const r=await api().prepare_extension();
+    if(r.error){ if(st) st.textContent=r.error; } else { S=await api().state(); paintOnboarding(false); }
+  };
+  const extopen = document.getElementById('o-extopen');
+  if (extopen) extopen.onclick = ()=> api().open_extension_folder();
+  document.querySelectorAll('[data-obrowser]').forEach(b=> b.onclick = ()=> api().open_browser_extensions_page(b.dataset.obrowser));
+}
+
+async function finishOnboarding() {
+  const r = await api().finish_onboarding();
+  if (r && !r.error) { S = r; TAB = 'home'; paint(); }
+}
+
+// ---- Home / study session ----
+function paintHome() {
+  const m = $('#main'); const sess = S.session;
+  if (sess) {
+    m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
+      <div class="card">
+        <div class="sess-grid">
+          <div><div class="small muted">Guarding now</div>
+            <h1>${h(sess.class)}${sess.assignment ? ' <span class="muted" style="font-weight:400">/ '+h(sess.assignment)+'</span>' : ''}</h1>
+            <div class="mt"><span class="tag ${sess.policy}">${h(S.policy_labels[sess.policy])}</span></div></div>
+          <div class="timer-wrap"><div class="timer-lab">Locked in for</div><div class="timer" id="sessTimer">${fmtDur(sess.elapsed||0)}</div></div>
+          <div class="timer-wrap"><div class="timer-lab">Today</div><div class="figure">${S.stats.today}</div><div class="small muted">${S.stats.flagged} flagged</div></div>
+        </div>
+        <div class="btnrow mt" style="margin-top:20px"><button class="btn ghost" id="end">End session</button>
+          <div class="small muted">Mode:
+            <b>${S.mode === 'block' ? 'Block' : 'Warn me'}</b> · <a href="#" id="chgMode">change</a></div></div>
+      </div>
+      <p class="small muted center">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
+    startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
+    $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
+      const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };
+    $('#chgMode').onclick = async (e) => { e.preventDefault(); const to = S.mode === 'block' ? 'warn' : 'block';
+      const pin = to === 'warn' ? await askPin('Loosening to warn mode needs the PIN.') : '';
+      if (pin === null) return; const r = await api().set_mode(to, pin || ''); if (r.error) toast(r.error); else refresh(); };
+    return;
+  }
+  if (!S.classes.length) {
+    m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
+      <div class="card center" style="padding:40px">
+        <h1>Welcome</h1><p class="sub" style="margin:10px auto 20px">Add a class and its syllabus. The guard learns that class's AI rules and checks your messages against them while you study.</p>
+        <button class="btn" onclick="TAB='classes';paint()">Add your first class</button></div></div>`;
+    return;
+  }
+  m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
+    <h1>Start a study session</h1><p class="sub">Pick what you're working on. The guard stays idle until you do.</p>
+    <div class="card"><div class="row">
+      <div><label>Class</label><select id="sc">${S.classes.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select></div>
+      <div><label>Assignment</label><select id="sa"></select></div>
+    </div>
+    <div class="field mt"><label>When you cross a line</label><select id="sm">
+      <option value="warn">Warn me — I can override, and it's logged</option>
+      <option value="block">Block the message</option></select></div>
+    <button class="btn" id="go">Start session</button></div></div>`;
+  const fillA = () => { const c = S.classes.find(x => x.id === $('#sc').value);
+    $('#sa').innerHTML = `<option value="">General work for this class</option>` + (c.assignments||[]).map(a => `<option value="${a.id}">${h(a.name)}</option>`).join(''); };
+  $('#sc').onchange = fillA; fillA();
+  $('#go').onclick = async () => { const r = await api().start_session($('#sc').value, $('#sa').value, $('#sm').value);
+    if (r.error) toast(r.error); else { TAB = 'home'; refresh(); } };
+}
+
+// ---- Classes ----
+function paintClasses() {
+  const m = $('#main');
+  m.innerHTML = `<div class="wrap">${engineBanner()}
+    <div class="row" style="align-items:center"><div style="flex:2"><h1>Classes</h1>
+      <p class="sub">Each class has its own AI rules, read from its syllabus.</p></div>
+      <div style="flex:1;text-align:right"><button class="btn" id="add">Add a class</button></div></div>
+    <div class="grid">${S.classes.map(classCard).join('') || '<p class="muted">No classes yet.</p>'}</div></div>`;
+  $('#add').onclick = () => openDocFlow('class');
+  m.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editClass(b.dataset.edit));
+  m.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    const pin = await askPin('Enter the PIN to delete this class.'); if (pin === null) return;
+    const r = await api().delete_class(b.dataset.del, pin || ''); if (r.error) toast(r.error); else refresh(); });
+  m.querySelectorAll('[data-asg]').forEach(b => b.onclick = () => openDocFlow('assignment', b.dataset.asg));
+}
+function classCard(c) {
+  return `<div class="card"><div class="row" style="align-items:flex-start">
+    <div style="flex:1"><h2>${h(c.name)}</h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span></div>
+    <button class="x" data-del="${c.id}" title="Delete">×</button></div>
+    <div class="small muted mt">${(c.rules||[]).length} rules · ${(c.assignments||[]).length} assignments</div>
+    <div class="btnrow mt"><button class="btn ghost sm" data-edit="${c.id}">Rules</button>
+      <button class="btn ghost sm" data-asg="${c.id}">Add assignment</button></div>
+    ${(c.assignments||[]).length ? '<div class="small muted mt">'+c.assignments.map(a=>h(a.name)).join(' · ')+'</div>' : ''}</div>`;
+}
+
+// Upload-and-read flow, shared by classes and assignments
+function openDocFlow(kind, classId) {
+  const isClass = kind === 'class';
+  const node = el(`<div><h2>${isClass ? 'Add a class' : 'Add an assignment'}</h2>
+    <p class="sub">${isClass ? 'Name the class and give it the syllabus. The AI reads the AI-use rules and shows you each one with the exact line it came from.' : 'Name the assignment and paste or upload it. Rules here apply on top of the class rules.'}</p>
+    <div class="field"><label>${isClass ? 'Class name' : 'Assignment name'}</label><input id="dn" placeholder="${isClass ? 'e.g. CS 7641 Machine Learning' : 'e.g. Homework 3'}"></div>
+    <div class="field"><label>Document</label><div class="btnrow"><button class="btn ghost sm" id="pick">Choose a file…</button>
+      <span class="small muted" id="fn">PDF, Word, or text</span></div></div>
+    <div class="field"><label>…or paste the text</label><textarea id="dt" rows="6" placeholder="Paste the ${isClass ? 'syllabus, or just its AI section' : 'assignment instructions'}"></textarea></div>
+    <p class="small muted" id="hint"></p>
+    <div class="btnrow" style="justify-content:flex-end"><button class="btn ghost" id="cx">Cancel</button>
+      <button class="btn" id="go">Read it</button></div></div>`);
+  let path = '';
+  node.querySelector('#cx').onclick = closeModal;
+  node.querySelector('#pick').onclick = async () => { const p = await api().choose_file(); if (p) { path = p; node.querySelector('#fn').textContent = p.split('/').pop(); } };
+  node.querySelector('#go').onclick = async () => {
+    const name = node.querySelector('#dn').value.trim(); if (!name) { toast('Give it a name first.'); return; }
+    const text = node.querySelector('#dt').value.trim();
+    if (!path && !text) { toast('Choose a file or paste the text.'); return; }
+    node.querySelector('#hint').innerHTML = '<span class="spin"></span> Reading the document… this can take up to a minute.';
+    node.querySelector('#go').disabled = true;
+    const res = await api().analyze(kind, name, path, text, classId || '', '');
+    if (res.error) { node.querySelector('#hint').textContent = res.error; node.querySelector('#go').disabled = false; return; }
+    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: res.rules, examples: res.examples, source_text: res.source_text }, res);
+  };
+  modal(node);
+}
+
+function ruleRow(r, i) {
+  return `<div class="ruleitem"><span class="rtype ${r.type}">${({allowed:'OK',not_allowed:'NOT OK',condition:'IF',exception:'EXCEPT'}[r.type]||'RULE')}</span>
+    <div class="body"><div contenteditable data-k="rule" data-i="${i}">${h(r.rule)}</div>
+      ${r.quote ? `<div class="quote">“${h(r.quote)}”</div>` : '<div class="quote muted">no quote — you added this</div>'}</div>
+    <button class="x" data-rm="${i}">×</button></div>`;
+}
+
+function reviewDraft(kind, classId, draft, meta) {
+  const isClass = kind === 'class';
+  const node = el(`<div><h2>Review the rules for ${h(draft.name)}</h2>
+    <p class="sub">${meta && meta.used_ai ? 'The AI read your document.' : 'Read without the AI judge (keyword search).'} Keep what's right, fix wording, or remove anything that doesn't belong. Every rule shows the line it came from.</p>
+    ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
+    ${isClass ? `<div class="field"><label>Overall AI policy</label><select id="pol">
+      ${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select></div>` : ''}
+    <label>Rules</label><div id="rules">${draft.rules.map(ruleRow).join('') || '<p class="small muted">No rules found. Add any that matter below.</p>'}</div>
+    <button class="btn ghost sm mt" id="addrule">+ Add a rule</button>
+    <div class="mt"><label>Example checks (help the AI judge)</label>
+      <div class="small muted">${(draft.examples||[]).map(e=>`“${h(e.prompt)}” → <span class="tag ${e.verdict}">${e.verdict}</span>`).join('<br>') || 'none'}</div></div>
+    <div class="btnrow mt" style="justify-content:flex-end"><button class="btn ghost" id="cx">Cancel</button>
+      <button class="btn" id="save">Save ${isClass ? 'class' : 'assignment'}</button></div></div>`);
+  const rules = JSON.parse(JSON.stringify(draft.rules));
+  const rerender = () => { node.querySelector('#rules').innerHTML = rules.map(ruleRow).join('') || '<p class="small muted">No rules yet.</p>'; wire(); };
+  const wire = () => {
+    node.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { rules.splice(+b.dataset.rm, 1); rerender(); });
+    node.querySelectorAll('[data-k="rule"]').forEach(d => d.oninput = () => rules[+d.dataset.i].rule = d.textContent);
+  };
+  wire();
+  node.querySelector('#addrule').onclick = () => { rules.push({ type: 'not_allowed', rule: '', quote: '' }); rerender();
+    const last = node.querySelectorAll('[data-k="rule"]'); last[last.length-1].focus(); };
+  node.querySelector('#cx').onclick = closeModal;
+  node.querySelector('#save').onclick = async () => {
+    const payload = { id: draft.id, name: draft.name, rules: rules.filter(r => r.rule.trim()), examples: draft.examples, source_text: draft.source_text };
+    if (isClass) payload.policy = node.querySelector('#pol').value;
+    const r = isClass ? await api().save_class(payload) : await api().save_assignment(classId, payload);
+    if (r.error) { toast(r.error); return; } closeModal(); toast('Saved.'); S = r; paint();
+  };
+  modal(node);
+}
+
+async function editClass(id) {
+  const c = S.classes.find(x => x.id === id);
+  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '' }, null);
+}
+
+// ---- Activity log ----
+async function paintLog() {
+  const m = $('#main');
+  m.innerHTML = `<div class="wrap"><div class="row" style="align-items:center">
+    <div style="flex:2"><h1>Activity</h1><p class="sub">Everything the guard has checked. Stored only on this Mac.</p></div>
+    <div style="flex:1;text-align:right"><div class="btnrow" style="justify-content:flex-end">
+      <button class="btn ghost sm" id="exp">Export report</button><button class="btn danger sm" id="clr">Clear</button></div></div></div>
+    <div class="card" id="loglist"><p class="muted">Loading…</p></div></div>`;
+  const log = await api().get_log(300);
+  const rows = log.map(e => {
+    const when = new Date(e.t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    if (e.event) return `<div class="logline"><span class="when">${when}</span><div class="txt muted">— ${h(e.event)}: ${h(e.class||'')} ${h(e.assignment||'')}</div></div>`;
+    const ok = e.result.startsWith('ok'), warned = e.result === 'warned' || e.result === 'sent after warning' || e.result === 'sent anyway';
+    return `<div class="logline"><span class="when">${when}</span><span class="dot ${ok?'':warned?'warn':'bad'}"></span>
+      <div class="txt"><b>${h(e.result)}</b> · ${h(e.where||'')} · ${h(e.class||'')} ${e.assignment?'/ '+h(e.assignment):''}
+      ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
+      <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
+  }).join('');
+  $('#loglist').innerHTML = rows || '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>';
+  $('#exp').onclick = async () => { const p = await api().export_log(); if (p) toast('Saved to ' + p.split('/').pop()); };
+  $('#clr').onclick = async () => { const pin = await askPin('Enter the PIN to clear the log.'); if (pin === null) return;
+    const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else paintLog(); };
+}
+
+// ---- History (study sessions) ----
+async function paintHistory() {
+  const m = $('#main');
+  m.innerHTML = `<div class="wrap"><div class="card" id="histcard"><p class="muted">Loading…</p></div></div>`;
+  const sessions = await api().sessions(200);
+  const totalSec = sessions.reduce((a,s)=>a+(s.seconds||0),0);
+  const totalChecks = sessions.reduce((a,s)=>a+(s.checks||0),0);
+  const head = `<div class="tiles" style="margin-bottom:18px">
+    <div class="tile mint"><div class="k">Sessions</div><div class="v">${sessions.length}</div><div class="foot">all time</div></div>
+    <div class="tile sky"><div class="k">Time locked in</div><div class="v">${fmtLong(totalSec)}</div><div class="foot">studying guarded</div></div>
+    <div class="tile sun"><div class="k">Messages checked</div><div class="v">${totalChecks}</div><div class="foot">across sessions</div></div>
+  </div>`;
+  const rows = sessions.map(sdef => {
+    const d = new Date(sdef.start*1000);
+    const mon = d.toLocaleString([], {month:'short'});
+    const day = d.getDate();
+    const time = d.toLocaleString([], {hour:'numeric', minute:'2-digit'});
+    const dur = sdef.live ? 'in progress' : fmtLong(sdef.seconds);
+    const badge = sdef.live ? '<span class="badge live">● live</span>'
+                 : (sdef.flagged>0 ? `<span class="badge some">${sdef.flagged} flagged</span>` : '<span class="badge">clean</span>');
+    return `<div class="hrow">
+      <div class="cal"><div class="m">${mon}</div><div class="d">${day}</div></div>
+      <div class="mid"><div class="name">${h(sdef.class)}${sdef.assignment?' <span class="muted">/ '+h(sdef.assignment)+'</span>':''}</div>
+        <div class="sub">${time} · ${sdef.checks} checked${sdef.mode?(' · '+h(sdef.mode)+' mode'):''}</div></div>
+      <div class="dur">${dur}</div>${badge}</div>`;
+  }).join('');
+  $('#histcard').outerHTML = `<div>${head}<div class="card">
+    <h2 style="margin-bottom:6px">Your lock-ins</h2>
+    <p class="sub">Every study session you guarded, newest first.</p>
+    ${rows || '<p class="muted">No sessions yet. Start one from the Study session tab and it\'ll show up here.</p>'}
+  </div></div>`;
+}
+
+// ---- Community (placeholder for the future) ----
+function paintCommunity() {
+  const m = $('#main');
+  m.innerHTML = `<div class="wrap">
+    <div class="comm-hero">
+      <div class="onb-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17.5 14.3A5.5 5.5 0 0 1 20.5 19"/></svg></div>
+      <h1>Community</h1>
+      <p class="onb-lead">A place to walk this out together. This is where HonestHands is headed next — you'll be able to pair up with an accountability partner, share your integrity record, and encourage each other to keep using AI the honest way.</p>
+    </div>
+    <div class="comm-grid">
+      <div class="comm-card"><div class="soon">Coming soon</div><h2>Accountability partners</h2><p class="small muted">Invite a friend, parent, or mentor. They get a simple weekly summary of your sessions and any overrides.</p></div>
+      <div class="comm-card"><div class="soon">Coming soon</div><h2>Tamper alerts</h2><p class="small muted">If the guard is turned off or stops running, your partner is notified — so the commitment stays real.</p></div>
+      <div class="comm-card"><div class="soon">Coming soon</div><h2>Groups</h2><p class="small muted">Study groups and classes can set shared standards and cheer each other on.</p></div>
+      <div class="comm-card"><div class="soon">Idea</div><h2>Streaks &amp; encouragement</h2><p class="small muted">Gentle streaks for honest work — celebrating the habit, not shaming the slip.</p></div>
+    </div>
+    <p class="small muted center mt">Have an idea for this space? It's being built with students like you in mind.</p>
+  </div>`;
+}
+
+// ---- Settings ----
+function paintSettings() {
+  const m = $('#main'); const e = S.engine;
+  const modelOpts = Object.entries(e.models).map(([k,v]) => `<option value="${k}" ${e.model===k?'selected':''}>${h(v)}</option>`).join('');
+  m.innerHTML = `<div class="wrap"><h1>Settings</h1>
+    <div class="card"><h2>The AI judge</h2><p class="sub">Who decides whether a message is OK.</p>
+      <div class="field"><label>Judge</label><select id="be">
+        <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — runs on this Mac, private, one-time download</option>
+        <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
+        <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no AI, no download</option>
+      </select></div>
+      <div class="field" id="mf" ${e.backend==='builtin'?'':'hidden'}><label>Model size</label><select id="mdl">${modelOpts}</select></div>
+      <div class="field" id="of" ${e.backend==='ollama'?'':'hidden'}><label>Ollama model name</label><input id="om" value="${h(e.ollama_model)}"></div>
+      <div class="btnrow"><button class="btn" id="apply">Apply</button>
+        <span class="small ${e.ready?'':'muted'}" id="est">${e.ready?'Ready.':h(e.message||'')}</span></div>
+      <div id="eprog"></div>
+    </div>
+    <div class="card"><h2>Browser extension</h2>
+      <p class="sub">For AI <b>websites</b> (Gemini, ChatGPT, Claude, and more), a small companion extension catches sends the Mac can't see on its own. It does nothing unless HonestHands is running and a session is active. Desktop AI apps are covered without it.</p>
+      <div id="extBody"></div>
+    </div>
+    <div class="card"><h2>Accountability PIN</h2>
+      <p class="sub">A friend or parent sets this. Then ending a session, switching to warn mode, deleting a class, or clearing the log needs it.</p>
+      <div class="row">${S.has_pin?'<div class="field"><label>Current PIN</label><input type="password" id="op" inputmode="numeric"></div>':''}
+        <div class="field"><label>${S.has_pin?'New PIN (blank to remove)':'Set a PIN'}</label><input type="password" id="np" inputmode="numeric"></div></div>
+      <button class="btn ghost" id="pinbtn">${S.has_pin?'Change PIN':'Set PIN'}</button></div>
+    <div class="card"><h2>This Mac</h2>
+      <div class="btnrow"><button class="btn ghost sm" id="acc">Accessibility settings</button>
+        <button class="btn ghost sm" id="data">Open data folder</button></div>
+      <p class="small muted mt">Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · Guard ${S.perms.watching ? 'active' : 'inactive'}</p></div>
+    </div>`;
+  // extension section
+  (function(){
+    const ext = S.extension || {browsers:[], installed_dir:''};
+    const box = document.getElementById('extBody');
+    if(!box) return;
+    const browsers = ext.browsers||[];
+    let html = '';
+    html += `<div class="btnrow" style="margin-bottom:10px">
+      <button class="btn" id="extPrep">${ext.installed_dir?'Re-copy extension files':'Set up the extension'}</button>
+      ${ext.installed_dir?'<button class="btn ghost" id="extOpen">Open extension folder</button>':''}
+    </div>`;
+    if(ext.installed_dir){
+      html += `<p class="small muted">Extension files are ready at:<br><code>${h(ext.installed_dir)}</code></p>`;
+      html += `<div class="step-note mt"><b>One-time enable (per browser):</b>
+        <ol class="small" style="margin:8px 0 0 18px;line-height:1.7">
+          <li>Open your browser's Extensions page ${browsers.length?'('+browsers.map(h).join(', ')+' detected)':''}</li>
+          <li>Turn on <b>Developer mode</b> (top-right)</li>
+          <li>Click <b>Load unpacked</b> and choose the folder above</li>
+        </ol></div>`;
+      html += `<div class="btnrow mt">` + browsers.filter(b=>['Google Chrome','Microsoft Edge','Brave'].includes(b))
+        .map(b=>`<button class="btn ghost sm" data-extbrowser="${h(b)}">Open ${h(b)} extensions</button>`).join('') + `</div>`;
+      html += `<p class="small muted mt">Chrome requires this one manual enable — no app can fully auto-install to a personal browser. After enabling once, it stays on.</p>`;
+    } else {
+      html += `<p class="small muted">Click “Set up the extension” to place the files, then enable it in your browser.</p>`;
+    }
+    box.innerHTML = html;
+    const prep = document.getElementById('extPrep');
+    if(prep) prep.onclick = async ()=>{ prep.disabled=true; const r=await api().prepare_extension();
+      if(r.error) toast(r.error); else { toast('Extension files ready.'); S=await api().state(); paint(); } };
+    const open = document.getElementById('extOpen');
+    if(open) open.onclick = ()=> api().open_extension_folder();
+    box.querySelectorAll('[data-extbrowser]').forEach(b=> b.onclick = ()=> api().open_browser_extensions_page(b.dataset.extbrowser));
+  })();
+
+  $('#be').onchange = () => { const v = $('#be').value; $('#mf').hidden = v !== 'builtin'; $('#of').hidden = v !== 'ollama'; };
+  $('#apply').onclick = async () => { $('#apply').disabled = true;
+    const r = await api().set_engine($('#be').value, $('#mdl').value, $('#om')?.value || '');
+    if (r.error) toast(r.error); else { S = r; toast('Applied. Preparing…'); paint(); } };
+  $('#pinbtn').onclick = async () => { const r = await api().set_pin($('#op')?.value || '', $('#np').value);
+    if (r.error) toast(r.error); else { S = r; toast('PIN updated.'); paint(); } };
+  $('#acc').onclick = () => api().open_accessibility_settings();
+  $('#data').onclick = () => api().open_data_folder();
+}
+
+// ---- boot + live polling for engine/session changes ----
+window.addEventListener('pywebviewready', async () => {
+  await refresh();
+  setInterval(async () => {
+    try { const sessSig = x => x ? [x.class_id,x.assignment_id,x.started].join(',') : '';
+      const prev = JSON.stringify(S.engine) + S.perms.watching + S.ext_live + sessSig(S.session);
+      const ns = await api().state();
+      if (!ns.onboarded) {
+        S = ns;
+        if (onbStructSig() !== lastOnbSig) paintOnboarding(false);  // real change: rebuild, no animation
+        else updateOnbStatus();                                    // just progress ticking: update in place
+        return;
+      }
+      if (JSON.stringify(ns.engine) + ns.perms.watching + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
+      else { S = ns; if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
+        const box=$('#eprog'); if(box) box.innerHTML=`<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}%</div>`; } }
+    } catch (_) {}
+  }, 1500);
+});
