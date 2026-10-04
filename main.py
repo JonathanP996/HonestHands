@@ -48,6 +48,7 @@ def ensure_single_instance():
         return False  # another instance holds the lock
 from engine import Engine
 from ai_guard import AIGuard
+import cloud
 from store import Store
 
 
@@ -89,7 +90,11 @@ class App:
         self.engine = Engine(self.store)
         self.ai_guard = AIGuard(self.store, self.engine)
         self.guard = watcher.Guard(self.store, self.ai_guard)
+        self.api = None
+        self.cloud = cloud.Cloud(self.store, self)
+        watcher.Guard.on_override = self.cloud.kick
         self.api = Api(self)
+        self.cloud.app = self
         self.window = None
         self.status_item = None
         self.menu_target = None
@@ -220,6 +225,7 @@ class App:
     def on_started(self):
         AppHelper.callAfter(self.setup_main_thread)
         self.engine.autostart()
+        self.cloud.start()
         def _warm_when_ready():
             import time as _t
             for _ in range(240):
@@ -446,6 +452,7 @@ class App:
                 self.store.log({'t': __import__('time').time(), 'where': where, 'class': cls['name'],
                                 'assignment': asg['name'] if asg else '', 'trigger': 'extension',
                                 'text': text[:300], 'result': 'sent anyway'})
+                self.cloud.kick()
                 return {'verdict': 'allow', 'sent_anyway': True}
             return {'verdict': 'block' if hard else 'warn',
                     'reason': r.get('reason', ''), 'rule': r.get('rule', ''),

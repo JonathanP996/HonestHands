@@ -1,5 +1,6 @@
 """Where everything is saved: classes, rules, the current session, settings, and the log."""
 import json
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -15,6 +16,7 @@ DEFAULTS = {
     'pin': '',
     'engine': {'backend': 'builtin', 'model': 'small', 'ollama_model': 'qwen2.5:3b'},
     'onboarded': False,
+    'cloud': {},
 }
 
 
@@ -66,6 +68,10 @@ class Store:
             tmp = CONFIG.with_suffix('.tmp')
             tmp.write_text(json.dumps(self.data, indent=2))
             tmp.replace(CONFIG)
+            try:
+                os.chmod(CONFIG, 0o600)       # holds the cloud sign-in token
+            except OSError:
+                pass
 
     def cls(self, cid):
         if cid == TUTOR_ID:

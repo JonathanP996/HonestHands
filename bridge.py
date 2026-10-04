@@ -3,6 +3,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 
+import cloud as cloudlib
 import distill
 import docs
 import rules
@@ -523,6 +524,59 @@ class Api:
         self._store.data['pin'] = ''
         self._store.save()
         return self.state()
+
+    # ---------- community (cloud) ----------
+    def _cloud(self, fn, *a):
+        try:
+            return fn(*a)
+        except cloudlib.CloudError as e:
+            return _err(e)
+        except Exception as e:
+            return _err(f'Something went wrong: {e}')
+
+    def cloud_status(self):
+        c = self._app.cloud
+        if not c.signed_in:
+            return {'signed_in': False}
+        r = self._cloud(c.me)
+        if isinstance(r, dict) and r.get('error'):
+            return {'signed_in': c.signed_in, 'error': r['error'], 'email': c.c.get('email')}
+        return dict(r, signed_in=True, sync=c.status)
+
+    def cloud_send_code(self, email):
+        return self._cloud(self._app.cloud.send_code, email)
+
+    def cloud_verify(self, email, code):
+        return self._cloud(self._app.cloud.verify, email, code)
+
+    def cloud_sign_out(self):
+        self._app.cloud.sign_out()
+        return True
+
+    def cloud_set_profile(self, handle, name):
+        return self._cloud(self._app.cloud.set_profile, handle, name)
+
+    def cloud_set_sharing(self, on):
+        return self._cloud(self._app.cloud.set_sharing, on)
+
+    def cloud_overview(self):
+        return self._cloud(self._app.cloud.overview)
+
+    def cloud_invite(self, handle, mode):
+        return self._cloud(self._app.cloud.invite, handle, mode)
+
+    def cloud_respond(self, pid, accept):
+        return self._cloud(self._app.cloud.respond, pid, accept)
+
+    def cloud_end(self, pid):
+        return self._cloud(self._app.cloud.end, pid)
+
+    def cloud_friend(self, user_id):
+        return self._cloud(self._app.cloud.friend, user_id)
+
+    def cloud_sync_now(self):
+        self._app.cloud.kick()
+        return True
 
     def open_accessibility_settings(self):
         watcher.has_accessibility(prompt=True)

@@ -776,9 +776,15 @@ class Guard:
             if r.get('level') == 'flag':
                 entry['reasons'] = r.get('reasons')
         self.store.log(entry)
+        if result in ('sent anyway', 'sent after warning') and Guard.on_override:
+            try:
+                Guard.on_override()
+            except Exception:
+                pass
 
     # The app sets this: fn(guard, r, hard, p, cls, asg) -> shows the block IN the app window.
     block_handler = None
+    on_override = None    # set by the app: called right after an override is logged (so it syncs at once)
     overlay_hook = None   # set by the app: is_open(), owns_point(x, y), choose(choice)
 
     def show_warning(self, r, hard, p, cls, asg):

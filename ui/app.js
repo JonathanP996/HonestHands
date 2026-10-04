@@ -478,24 +478,6 @@ async function paintLog() {
     const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else { LOGPAGE = 1; paintLog(); } };
 }
 
-// ---- Community (placeholder for the future) ----
-function paintCommunity() {
-  const m = $('#main');
-  m.innerHTML = `<div class="wrap">
-    <div class="comm-hero">
-      <div class="onb-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17.5 14.3A5.5 5.5 0 0 1 20.5 19"/></svg></div>
-      <h1>Community</h1>
-      <p class="onb-lead">A place to walk this out together. This is where HonestHands is headed next — you'll be able to pair up with an accountability partner, share your integrity record, and encourage each other to keep using AI the honest way.</p>
-    </div>
-    <div class="comm-grid">
-      <div class="comm-card"><div class="soon">Coming soon</div><h2>Accountability partners</h2><p class="small muted">Invite a friend, parent, or mentor. They get a simple weekly summary of your sessions and any overrides.</p></div>
-      <div class="comm-card"><div class="soon">Coming soon</div><h2>Tamper alerts</h2><p class="small muted">If the guard is turned off or stops running, your partner is notified — so the commitment stays real.</p></div>
-      <div class="comm-card"><div class="soon">Coming soon</div><h2>Groups</h2><p class="small muted">Study groups and classes can set shared standards and cheer each other on.</p></div>
-      <div class="comm-card"><div class="soon">Idea</div><h2>Streaks &amp; encouragement</h2><p class="small muted">Gentle streaks for honest work — celebrating the habit, not shaming the slip.</p></div>
-    </div>
-    <p class="small muted center mt">Have an idea for this space? It's being built with students like you in mind.</p>
-  </div>`;
-}
 
 // ---- Settings ----
 function paintSettings() {
