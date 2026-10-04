@@ -310,7 +310,7 @@ function paintClasses() {
   m.querySelectorAll('[data-asg]').forEach(b => b.onclick = () => openDocFlow('assignment', b.dataset.asg));
 }
 function classCard(c) {
-  return `<div class="card cc full cc-${c.color}"><div class="row" style="align-items:flex-start">
+  return `<div class="card cc cc-${c.color}"><div class="row" style="align-items:flex-start">
     <div style="flex:1;cursor:pointer" data-view="${c.id}" title="See rules and assignments"><h2><span class="cdot"></span>${h(c.name)} <span class="muted" style="font-size:14px">›</span></h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span></div>
     <button class="x" data-del="${c.id}" title="Delete">×</button></div>
     <div class="small muted mt">${(c.assignments||[]).length} assignment${(c.assignments||[]).length === 1 ? '' : 's'}</div>
