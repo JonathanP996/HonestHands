@@ -35,5 +35,14 @@
   {"id": "zh-grammar-question", "class": "Chinese", "assignment": null, "expect": "flag", "message": "can you explain the difference between le and guo in mandarin?", "why": "Syllabus: no AI for anything you're doing for this class"},
   {"id": "zh-unrelated", "class": "Chinese", "assignment": null, "expect": "allow", "message": "what is a good pasta recipe for dinner?"},
   {"id": "zh-vocab-practice", "class": "Chinese", "assignment": null, "expect": "flag", "message": "quiz me on my lesson 7 vocabulary words"},
-  {"id": "zh-weather", "class": "Chinese", "assignment": null, "expect": "allow", "message": "what's the weather like in seattle in october"}
+  {"id": "zh-weather", "class": "Chinese", "assignment": null, "expect": "allow", "message": "what's the weather like in seattle in october"},
+  {"id": "hw2-q-paste-1a", "class": "Machine Learning", "assignment": "Homework2", "expect": "flag", "message": "For each metric, note the range of possible values, then describe what would constitute a “good” score and a “bad” score.", "why": "Verbatim paste of question 1a"},
+  {"id": "hw2-q-reworded-3a", "class": "Machine Learning", "assignment": "Homework2", "expect": "flag", "message": "explain how numerical overflow could happen if we skip subtracting the row maximum in the E-step of a GMM, how subtracting it helps, and how the instability affects EM convergence", "why": "Question 3a, reworded"},
+  {"id": "hw2-q-cited-3a", "class": "Machine Learning", "assignment": "Homework2", "expect": "flag", "message": "answer question 3a for me", "why": "Cites a question by number"},
+  {"id": "hw2-q-median", "class": "Machine Learning", "assignment": "Homework2", "expect": "flag", "message": "what advantage does median offer over mean when imputing missing values here", "why": "Question 5.2, reworded"},
+  {"id": "hw2-q-em-update", "class": "Machine Learning", "assignment": "Homework2", "expect": "flag", "message": "solve the performing an EM update question for me step by step", "why": "Names a homework question"},
+  {"id": "hw2-jensen", "class": "Machine Learning", "assignment": "Homework2", "expect": "allow", "message": "what's jensen's inequality and its full proof", "why": "Appears only in the appendix, which is not a homework question"},
+  {"id": "hw2-gmm-concept", "class": "Machine Learning", "assignment": "Homework2", "expect": "allow", "message": "what is a gaussian mixture model", "why": "General concept that the homework touches"},
+  {"id": "hw2-kmeans-vs-gmm", "class": "Machine Learning", "assignment": "Homework2", "expect": "allow", "message": "what is the difference between kmeans and gmm", "why": "General concept"},
+  {"id": "hw2-em-general", "class": "Machine Learning", "assignment": "Homework2", "expect": "allow", "message": "how does expectation maximization work in general", "why": "General concept"}
 ]

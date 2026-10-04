@@ -6,6 +6,7 @@ import time
 
 import distill
 import docs
+import homework
 import rules
 from engine import parse_json as engine_parse
 
@@ -50,6 +51,15 @@ Reply with JSON only: {"policy": "forbids" | "allows" | "silent"}
 
 RELATED_SYSTEM = """A course bans AI use entirely, including for anything the student does for the course. Decide whether the student's message is about this course's subject (for example studying, practising, translating, vocabulary, grammar, homework, or explanations of the course material) as opposed to something unrelated (cooking, travel, general chat).
 Reply with JSON only: {"related": true|false}"""
+
+HOMEWORK_SYSTEM = """You help check a student's message to an AI chatbot against the homework they are working on. Below are the homework questions that look closest to the message.
+
+Answer copies=true if the message asks the AI to do what one of these homework questions asks the student to do: solve it, prove it, derive it, compute it, write it out, or finish it. That still counts when the message is reworded, shortened, partial, or has small changes.
+Answer copies=false if the message only asks what something means, how an idea or algorithm works in general, or for background that the question does not itself ask the student to produce.
+
+Reply with JSON only: {"copies": true|false, "which": "<letter of the question, or empty>"}"""
+
+HW_ITEM = re.compile(r"\b(question|problem|solve|answer|solution|homework|assignment|share)\w*", re.I)
 
 BAN_HINT = re.compile(r"\b(not (be )?(permitted|allowed)|prohibit\w*|forbid\w*|may not|must not|cannot|never|dishonest\w*)\b", re.I)
 
@@ -137,6 +147,7 @@ class AIGuard:
         self.cache = {}
         self.inflight = set()
         self.items = {}           # (class, assignment, policy hash) -> checklist
+        self.hw_index = {}        # (assignment, text hash) -> its questions, ready to search
         self.items_pending = {}
         self.items_failed = {}
         self.pending = {}     # key -> Event, so the same message is only guarded once at a time
@@ -229,7 +240,10 @@ class AIGuard:
         else:
             try:
                 items = self.items_for(cls, asg, wait=min(timeout, 12))
-                if items:
+                hw = self._homework_check(text, cls, asg, where, timeout, items) if (asg and items) else None
+                if hw:
+                    result = hw                          # it matches one of this assignment's own questions
+                elif items:
                     result = self._classify_result(text, cls, asg, where, timeout, items, kw)
                 else:
                     result = self._freeform(text, cls, asg, where, timeout, kw)
@@ -322,6 +336,51 @@ class AIGuard:
         print(f'[guard] checklist for {cls["name"]}{" / " + asg["name"] if asg else ""}: '
               f'{len(forbidden)} forbidden, {len(allowed)} allowed', flush=True)
         return {'forbidden': forbidden, 'allowed': allowed}
+
+    def _hw_index(self, asg):
+        src = (asg or {}).get('source_text') or ''
+        if len(src) < 200:
+            return None
+        key = (asg['id'], hashlib.sha1(src.encode()).hexdigest()[:12])
+        with self.lock:
+            idx = self.hw_index.get(key)
+        if idx is None:
+            idx = homework.build_index(src)
+            with self.lock:
+                self.hw_index[key] = idx
+        return idx
+
+    def _homework_check(self, text, cls, asg, where, timeout, items=None):
+        """Does this message copy, cite, or closely resemble one of THIS assignment's questions? None = no concern."""
+        if not asg:
+            return None
+        items = items or self.items_for(cls, asg, wait=1)
+        gate = [f for f in (items or {}).get('forbidden', []) if HW_ITEM.search(f['item'])]
+        if not gate:
+            return None                               # this policy doesn't forbid asking the AI about assignment questions
+        idx = self._hw_index(asg)
+        cands = homework.find(text, idx) if idx else []
+        if not cands:
+            return None
+        why = cands[0]['why']
+        if why == 'similar' or why == 'cited':
+            letters = 'ABCDE'
+            body = '\n'.join(f'[{letters[i]}] {c["label"]}: {c["text"][:600]}' for i, c in enumerate(cands))
+            raw = self.engine.chat_raw(HOMEWORK_SYSTEM, f'Closest homework questions:\n{body}\n\nStudent message:\n<<<\n{text[:1500]}\n>>>', timeout=timeout, max_tokens=40)
+            if not re.search(r'"copies"\s*:\s*true', raw, re.I):
+                return None
+            m = re.search(r'"which"\s*:\s*"?([A-E])', raw)
+            c = cands[letters.index(m.group(1))] if m else cands[0]
+        else:
+            c = cands[0]                              # a near word-for-word paste needs no second opinion
+        where_q = c['label']
+        f = gate[0]
+        reason = f'This looks like it comes from the assignment ({where_q}). Asking the AI to solve it isn\'t allowed.'
+        res = {'level': 'flag', 'hard': False, 'reason': reason, 'rule': "Don't ask the AI to solve assignment questions", 'quote': f['quote'],
+               'tip': 'Ask about the idea behind it instead, without pasting the question. For example, "What does this term mean?" or "How does this method work in general?"',
+               'verdict': 'warn', 'source': 'ai'}
+        res['reasons'] = [reason, f'Rule: {res["rule"]}']
+        return res
 
     def _classify_prompt(self, text, cls, items, where):
         lst = '\n'.join(f'{i + 1}. {f["item"]}' for i, f in enumerate(items['forbidden'])) or '(none)'

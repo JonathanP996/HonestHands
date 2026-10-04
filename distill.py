@@ -102,7 +102,7 @@ def analyze(engine, text, kind='class', name=''):
     policy_guess, _ = rules.suggest_policy(text)
     policy_text = docs.ai_policy_text(text, 5000 if kind == 'class' else 2500)
     result = {'policy': policy_guess or 'tutor', 'rules': [], 'examples': [], 'dropped': 0, 'used_ai': False,
-              'note': '', 'source_text': text[:20000], 'policy_text': policy_text, 'category_reason': ''}
+              'note': '', 'source_text': text[:(80000 if kind != 'class' else 40000)], 'policy_text': policy_text, 'category_reason': ''}
     if not policy_text:
         result['note'] = ('No mention of AI or outside help was found in this document. '
                           'Type or paste the rules into the box if there are any.')

@@ -31,7 +31,7 @@ def git(*a):
 
 def prompt_fingerprint():
     """Changes whenever any of the guard's instructions change."""
-    blob = ''.join(getattr(ai_guard, n) for n in ('SYSTEM', 'EXTRACT_SYSTEM', 'CLASSIFY_SYSTEM', 'VERIFY_SYSTEM', 'RELATED_SYSTEM'))
+    blob = ''.join(getattr(ai_guard, n) for n in ('SYSTEM', 'EXTRACT_SYSTEM', 'CLASSIFY_SYSTEM', 'VERIFY_SYSTEM', 'RELATED_SYSTEM', 'HOMEWORK_SYSTEM'))
     return hashlib.sha1(blob.encode()).hexdigest()[:8]
 
 
@@ -39,9 +39,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--model', choices=list(MODELS), help='model to test (default: the one chosen in Settings)')
     ap.add_argument('--only', default='', help='run only case ids starting with this')
+    ap.add_argument('--config', help='read classes from this config.json (e.g. a backup) instead of the live one')
     ap.add_argument('--no-record', action='store_true', help="don't append to results.jsonl")
     args = ap.parse_args()
 
+    if args.config:
+        import store as _st
+        _st.CONFIG = Path(args.config)
     store = Store()
     if args.model:
         store.data['engine']['model'] = args.model            # in memory only; nothing is saved
