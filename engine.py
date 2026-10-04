@@ -66,13 +66,15 @@ class Engine:
         self._busy = False
         self._call_lock = threading.Lock()
         self._gen = 0              # bumped on each (re)start so stale threads bail out
+        self._dl_bg = False
+        self.override = None       # a different, already-installed model used until the chosen one is downloaded
 
     @property
     def cfg(self):
         return self.store.data['engine']
 
     def model(self):
-        return MODELS.get(self.cfg.get('model'), MODELS['small'])
+        return MODELS.get(self.override or self.cfg.get('model'), MODELS['small'])
 
     def model_path(self):
         return MODEL_DIR / self.model()['file']
@@ -106,6 +108,16 @@ class Engine:
     # ---------- start / stop ----------
     def autostart(self):
         b = self.cfg['backend']
+        # If the chosen model isn't downloaded but another one is, use it now rather than
+        # silently falling back to keyword-only checking. Choosing a model in Settings downloads it.
+        self.override = None
+        if b == 'builtin' and llama_available() and not (MODEL_DIR / self.model()['file']).exists():
+            for key, m in MODELS.items():
+                if (MODEL_DIR / m['file']).exists():
+                    self.override = key
+                    break
+            if self.override:
+                threading.Thread(target=self._finish_chosen_download, daemon=True).start()
         if b == 'keywords':
             self._set('off', 'Using keyword rules only.')
         elif b == 'builtin' and not self.installed():
@@ -168,20 +180,42 @@ class Engine:
     def _download(self, url, dest, label, gen):
         dest.parent.mkdir(parents=True, exist_ok=True)
         part = dest.with_name(dest.name + '.part')
-        req = urllib.request.Request(url, headers=UA)
-        with urllib.request.urlopen(req, timeout=60) as r, open(part, 'wb') as f:
-            total = int(r.headers.get('Content-Length') or 0)
-            done = 0
+        have = part.stat().st_size if part.exists() else 0     # resume an interrupted download
+        req = urllib.request.Request(url, headers=dict(UA, **({'Range': f'bytes={have}-'} if have else {})))
+        with urllib.request.urlopen(req, timeout=60) as r:
+            resumed = have > 0 and getattr(r, 'status', 200) == 206
+            f = open(part, 'ab' if resumed else 'wb')
+            total = int(r.headers.get('Content-Length') or 0) + (have if resumed else 0)
+            done = have if resumed else 0
             while True:
-                if gen != self._gen:
-                    f.close(); part.unlink(missing_ok=True); return
+                if gen is not None and gen != self._gen:
+                    f.close(); return
                 chunk = r.read(1 << 20)
                 if not chunk:
                     break
                 f.write(chunk)
                 done += len(chunk)
                 self.progress = {'label': label, 'done': done, 'total': total}
+            f.close()
         part.replace(dest)
+
+    def _finish_chosen_download(self):
+        """Keeps downloading the model chosen in Settings (resuming a partial file) while the
+        installed one does the judging, then switches over when it's complete."""
+        chosen = MODELS.get(self.cfg.get('model'))
+        if not chosen or self._dl_bg:
+            return
+        self._dl_bg = True
+        try:
+            self._download(chosen['url'], MODEL_DIR / chosen['file'], 'AI model', None)
+            if (MODEL_DIR / chosen['file']).exists():
+                self.override = None
+                self.start()          # reload with the model you chose
+        except Exception as ex:
+            print('background model download stopped:', ex)
+        finally:
+            self._dl_bg = False
+            self.progress = None
 
     def _download_model(self, gen):
         self._set('downloading', 'Downloading the AI model (one time).')
@@ -215,19 +249,25 @@ class Engine:
         self._set('ready', f'AI judge is ready (Ollama, {name}).')
 
     # ---------- asking the model ----------
-    def chat_json(self, system, user, timeout=20, max_tokens=200):
+    def chat_raw(self, system, user, timeout=20, max_tokens=200):
+        """Returns the model's raw text. Gives up (rather than queueing forever) if another call hogs the model."""
         msgs = [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]
-        with self._call_lock:
+        if not self._call_lock.acquire(timeout=max(1, timeout)):
+            raise TimeoutError('the AI judge was busy')
+        try:
             if self.cfg['backend'] == 'ollama':
                 r = http_json(f'{OLLAMA}/api/chat', {
                     'model': self.cfg.get('ollama_model') or 'qwen2.5:3b', 'messages': msgs, 'stream': False,
                     'format': 'json', 'keep_alive': '60m',
                     'options': {'temperature': 0, 'num_predict': max_tokens, 'num_ctx': 8192},
                 }, timeout=timeout)
-                return parse_json(r['message']['content'])
+                return r['message']['content']
             if self.llama is None:
                 raise RuntimeError('the AI judge is not loaded')
-            out = self.llama.create_chat_completion(
-                messages=msgs, temperature=0, max_tokens=max_tokens,
-                response_format={'type': 'json_object'})
-            return parse_json(out['choices'][0]['message']['content'])
+            out = self.llama.create_chat_completion(messages=msgs, temperature=0, max_tokens=max_tokens)  # no JSON grammar: it can abort llama.cpp
+            return out['choices'][0]['message']['content']
+        finally:
+            self._call_lock.release()
+
+    def chat_json(self, system, user, timeout=20, max_tokens=200):
+        return parse_json(self.chat_raw(system, user, timeout, max_tokens))

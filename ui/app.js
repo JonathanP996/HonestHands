@@ -246,7 +246,7 @@ function paintHome() {
   const m = $('#main'); const sess = S.session;
   if (sess) {
     m.innerHTML = `<div class="wrap">${permBanner()}${engineBanner()}
-      <div class="card">
+      <div class="card cc cc-${sess.color || 'lav'}">
         <div class="sess-grid">
           <div><div class="small muted">Guarding now</div>
             <h1>${h(sess.class)}${sess.assignment ? ' <span class="muted" style="font-weight:400">/ '+h(sess.assignment)+'</span>' : ''}</h1>
@@ -254,21 +254,16 @@ function paintHome() {
           <div class="timer-wrap"><div class="timer-lab">Locked in for</div><div class="timer" id="sessTimer">${fmtDur(sess.elapsed||0)}</div></div>
           <div class="timer-wrap"><div class="timer-lab">Today</div><div class="figure">${S.stats.today}</div><div class="small muted">${S.stats.flagged} flagged</div></div>
         </div>
-        <div class="btnrow mt" style="margin-top:20px"><button class="btn ghost" id="end">End session</button>
-          <div class="small muted">Mode:
-            <b>${S.mode === 'block' ? 'Block' : 'Warn me'}</b> · <a href="#" id="chgMode">change</a></div></div>
+        <div class="btnrow mt" style="margin-top:20px"><button class="btn ghost" id="end">End session</button></div>
       </div>
       <p class="small muted center">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
     startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
     $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
       const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };
-    $('#chgMode').onclick = async (e) => { e.preventDefault(); const to = S.mode === 'block' ? 'warn' : 'block';
-      const pin = to === 'warn' ? await askPin('Loosening to warn mode needs the PIN.') : '';
-      if (pin === null) return; const r = await api().set_mode(to, pin || ''); if (r.error) toast(r.error); else refresh(); };
     return;
   }
   const TUTOR = S.tutor_mode, ALL = [TUTOR, ...S.classes];
-  let selC = (S.classes[0] || TUTOR).id, selA = '', selM = 'warn';
+  let selC = (S.classes[0] || TUTOR).id, selA = '';
   m.innerHTML = `<div class="wrap sess">${permBanner()}${engineBanner()}
     <div class="sess-hero"><div><h1>Start a study session</h1>
       <p class="sub" style="margin:6px 0 0">Pick what you're working on. The guard stays idle until you do.</p></div></div>
@@ -276,32 +271,25 @@ function paintHome() {
     <div class="classgrid" id="cg"></div>
     <div id="asgstep"><div class="step"><span class="n">2</span>Which assignment?</div>
     <div class="seg" id="ag"></div></div>
-    <div class="step"><span class="n">3</span>When you cross a line</div>
-    <div class="modes" id="mg">
-      <button class="mode warn" data-m="warn"><div class="ic">✋</div><div><b>Warn me</b><span>I can override it, and it's logged.</span></div></button>
-      <button class="mode block" data-m="block"><div class="ic">🛑</div><div><b>Block the message</b><span>It won't send until I change it.</span></div></button>
-    </div>
     ${S.classes.length ? '' : `<p class="small muted" style="margin-top:18px">Want your own syllabus rules? <a href="#" onclick="TAB='classes';paint();return false">Add a class</a> any time.</p>`}
     <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
   const cls = () => ALL.find(x => x.id === selC);
   const paintPicks = () => {
     $('#cg').innerHTML = ALL.map(c => { const k = (c.assignments || []).length;
-      return `<button class="pick ${c.builtin ? 'tutor' : ''} ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
-        <span class="nm">${h(c.name)}</span><span class="meta">${c.builtin ? 'No class needed · AI as a study partner' : h(S.policy_labels[c.policy] || '') + ' · ' + k + ' assignment' + (k === 1 ? '' : 's')}</span></button>`; }).join('');
+      return `<button class="pick cc-${c.color} ${c.builtin ? 'tutor' : ''} ${c.id === selC ? 'on' : ''}" data-c="${c.id}"><span class="tick">✓</span>
+        <span class="nm">${h(c.name)}</span><span class="meta">${c.builtin ? 'Use AI as a study partner' : h(S.policy_labels[c.policy] || '') + ' · ' + k + ' assignment' + (k === 1 ? '' : 's')}</span></button>`; }).join('');
     const asg = cls().assignments || [];
     $('#asgstep').hidden = !!cls().builtin;
     if (!asg.some(a => a.id === selA)) selA = '';
     $('#ag').innerHTML = `<button class="${selA === '' ? 'on' : ''}" data-a="">General work</button>` +
       asg.map(a => `<button class="${a.id === selA ? 'on' : ''}" data-a="${a.id}">${h(a.name)}</button>`).join('');
-    m.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === selM));
     const an = (asg.find(a => a.id === selA) || {}).name;
-    $('#sum').innerHTML = `${cls().builtin ? 'Using' : 'Guarding'} <b>${h(cls().name)}</b>${an ? ' / <b>' + h(an) + '</b>' : ''} · ${selM === 'block' ? 'blocking' : 'warning'} mode`;
+    $('#sum').innerHTML = `${cls().builtin ? 'Using' : 'Guarding'} <b>${h(cls().name)}</b>${an ? ' / <b>' + h(an) + '</b>' : ''}`;
     m.querySelectorAll('.pick').forEach(b => b.onclick = () => { selC = b.dataset.c; paintPicks(); });
     m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
   };
-  m.querySelectorAll('.mode').forEach(b => b.onclick = () => { selM = b.dataset.m; paintPicks(); });
   paintPicks();
-  $('#go').onclick = async () => { const r = await api().start_session(selC, selA, selM);
+  $('#go').onclick = async () => { const r = await api().start_session(selC, selA, 'warn');
     if (r.error) toast(r.error); else { TAB = 'home'; refresh(); } };
 }
 
@@ -315,17 +303,19 @@ function paintClasses() {
     <div class="grid">${S.classes.map(classCard).join('') || '<p class="muted">No classes yet.</p>'}</div></div>`;
   $('#add').onclick = () => openDocFlow('class');
   m.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editClass(b.dataset.edit));
+  m.querySelectorAll('[data-view]').forEach(b => b.onclick = () => viewClass(b.dataset.view));
   m.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     const pin = await askPin('Enter the PIN to delete this class.'); if (pin === null) return;
     const r = await api().delete_class(b.dataset.del, pin || ''); if (r.error) toast(r.error); else refresh(); });
   m.querySelectorAll('[data-asg]').forEach(b => b.onclick = () => openDocFlow('assignment', b.dataset.asg));
 }
 function classCard(c) {
-  return `<div class="card"><div class="row" style="align-items:flex-start">
-    <div style="flex:1"><h2>${h(c.name)}</h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span></div>
+  return `<div class="card cc cc-${c.color}"><div class="row" style="align-items:flex-start">
+    <div style="flex:1;cursor:pointer" data-view="${c.id}" title="See rules and assignments"><h2><span class="cdot"></span>${h(c.name)} <span class="muted" style="font-size:14px">›</span></h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span></div>
     <button class="x" data-del="${c.id}" title="Delete">×</button></div>
     <div class="small muted mt">${(c.assignments||[]).length} assignment${(c.assignments||[]).length === 1 ? '' : 's'}</div>
-    <div class="btnrow mt"><button class="btn ghost sm" data-edit="${c.id}">Rules</button>
+    <div class="btnrow mt"><button class="btn ghost sm" data-view="${c.id}">View</button>
+      <button class="btn ghost sm" data-edit="${c.id}">Edit rules</button>
       <button class="btn ghost sm" data-asg="${c.id}">Add assignment</button></div>
     ${(c.assignments||[]).length ? '<div class="small muted mt">'+c.assignments.map(a=>h(a.name)).join(' · ')+'</div>' : ''}</div>`;
 }
@@ -353,7 +343,7 @@ function openDocFlow(kind, classId) {
     node.querySelector('#go').disabled = true;
     const res = await api().analyze(kind, name, path, text, classId || '', '');
     if (res.error) { node.querySelector('#hint').textContent = res.error; node.querySelector('#go').disabled = false; return; }
-    reviewDraft(kind, classId, { id: '', name, policy: res.policy, rules: [], examples: res.examples, source_text: res.source_text, policy_text: res.policy_text, category_reason: res.category_reason }, res);
+    reviewDraft(kind, classId, { id: '', name, policy: res.policy, color: COLORS.find(k => !S.classes.some(c => c.color === k)) || COLORS[S.classes.length % COLORS.length], rules: [], examples: res.examples, source_text: res.source_text, policy_text: res.policy_text, category_reason: res.category_reason }, res);
   };
   modal(node);
 }
@@ -373,14 +363,17 @@ function reviewDraft(kind, classId, draft, meta) {
       : 'Anything this assignment says about AI or outside help. It applies on top of the class rules.'}</p>
     ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
     <div class="field"><textarea id="ptext" rows="${isClass ? 13 : 7}" placeholder="Paste or type the AI / collaboration rules here">${h(draft.policy_text || '')}</textarea></div>
+    ${isClass ? `<div class="field"><label>Color</label><div class="swatches" id="swatches">${COLORS.map(k => `<button type="button" class="sw cc-${k} ${draft.color === k ? 'on' : ''}" data-col="${k}" aria-label="${k}"></button>`).join('')}</div></div>` : ''}
     ${isClass ? `<div class="catline"><span class="muted small">Label:</span>
       <select id="pol" class="mini">${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select>
       ${draft.category_reason ? `<span class="small muted">${h(draft.category_reason)}</span>` : ''}</div>` : ''}
     <div class="btnrow mt" style="justify-content:flex-end"><button class="btn ghost" id="cx">Cancel</button>
       <button class="btn" id="save">Save ${isClass ? 'class' : 'assignment'}</button></div></div>`);
+  node.querySelectorAll('.sw').forEach(b => b.onclick = () => { draft.color = b.dataset.col;
+    node.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === b)); });
   node.querySelector('#cx').onclick = closeModal;
   node.querySelector('#save').onclick = async () => {
-    const payload = { id: draft.id, name: draft.name, rules: draft.rules || [], examples: draft.examples || [], source_text: draft.source_text, policy_text: node.querySelector('#ptext').value };
+    const payload = { color: draft.color, id: draft.id, name: draft.name, rules: draft.rules || [], examples: draft.examples || [], source_text: draft.source_text, policy_text: node.querySelector('#ptext').value };
     if (isClass) { payload.policy = node.querySelector('#pol').value; payload.category_reason = draft.category_reason || ''; }
     const r = isClass ? await api().save_class(payload) : await api().save_assignment(classId, payload);
     if (r.error) { toast(r.error); return; } closeModal(); toast('Saved.'); S = r; paint();
@@ -388,12 +381,39 @@ function reviewDraft(kind, classId, draft, meta) {
   modal(node);
 }
 
+function viewClass(id) {
+  const c = S.classes.find(x => x.id === id); if (!c) return;
+  const text = c.policy_text || (c.rules || []).map(r => r.quote || r.rule).join('\n\n');
+  const asg = c.assignments || [];
+  const node = el(`<div><h2><span class="cdot cc-${c.color}"></span>${h(c.name)}</h2><span class="tag ${c.policy}">${h(S.policy_labels[c.policy])}</span>
+    <div class="step" style="margin-top:20px"><span class="n">1</span>Class AI rules</div>
+    <div class="policybox">${text ? h(text) : '<span class="muted">No AI rules saved for this class yet.</span>'}</div>
+    <div class="step"><span class="n">2</span>Assignments <span class="muted small">(${asg.length})</span></div>
+    ${asg.map(a => `<details class="asgrow"><summary><b>${h(a.name)}</b>
+        <span class="small muted">${a.policy_text || (a.rules || []).length ? 'has its own AI rules' : 'no extra AI rules'}</span></summary>
+      <div class="policybox">${a.policy_text ? h(a.policy_text) : (a.rules || []).length ? h(a.rules.map(r => r.quote || r.rule).join('\n\n')) : '<span class="muted">This assignment doesn\'t say anything about AI. The class rules apply.</span>'}</div>
+      <div class="btnrow"><button class="btn ghost sm" data-ea="${a.id}">Edit</button><button class="btn danger sm" data-da="${a.id}">Delete</button></div></details>`).join('')
+      || '<p class="small muted">No assignments yet.</p>'}
+    <div class="btnrow mt" style="justify-content:flex-end"><button class="btn ghost" id="vadd">Add assignment</button><button class="btn" id="vcx">Done</button></div></div>`);
+  node.querySelector('#vcx').onclick = closeModal;
+  node.querySelector('#vadd').onclick = () => { closeModal(); openDocFlow('assignment', id); };
+  node.querySelectorAll('[data-ea]').forEach(b => b.onclick = () => { const a = asg.find(x => x.id === b.dataset.ea); closeModal();
+    reviewDraft('assignment', id, { id: a.id, name: a.name, rules: a.rules || [], examples: a.examples || [], source_text: '',
+      policy_text: a.policy_text || (a.rules || []).map(r => r.quote || r.rule).join('\n\n') }, null); });
+  node.querySelectorAll('[data-da]').forEach(b => b.onclick = async () => {
+    const pin = await askPin('Enter the PIN to delete this assignment.'); if (pin === null) return;
+    const r = await api().delete_assignment(id, b.dataset.da, pin || ''); if (r.error) toast(r.error); else { S = r; closeModal(); paint(); viewClass(id); } });
+  modal(node);
+}
+
 async function editClass(id) {
   const c = S.classes.find(x => x.id === id);
-  reviewDraft('class', id, { id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '', policy_text: c.policy_text || (c.rules || []).map(r => r.quote || r.rule).join('\n\n'), category_reason: c.category_reason || '' }, null);
+  reviewDraft('class', id, { color: c.color, id: c.id, name: c.name, policy: c.policy, rules: c.rules || [], examples: c.examples || [], source_text: '', policy_text: c.policy_text || (c.rules || []).map(r => r.quote || r.rule).join('\n\n'), category_reason: c.category_reason || '' }, null);
 }
 
 // ---- Activity log ----
+const COLORS = ['lav', 'mint', 'sun', 'sky', 'rose', 'peach', 'sage', 'sand'];
+let LOGPAGE = 1;
 async function paintLog() {
   const m = $('#main');
   m.innerHTML = `<div class="wrap"><div class="row" style="align-items:center">
@@ -401,8 +421,9 @@ async function paintLog() {
     <div style="flex:1;text-align:right"><div class="btnrow" style="justify-content:flex-end">
       <button class="btn ghost sm" id="exp">Export report</button><button class="btn danger sm" id="clr">Clear</button></div></div></div>
     <div class="card" id="loglist"><p class="muted">Loading…</p></div></div>`;
-  const log = await api().get_log(300);
-  const rows = log.map(e => {
+  const pg = await api().get_log_page(LOGPAGE, 25);
+  LOGPAGE = pg.page;
+  const rows = pg.rows.map(e => {
     const when = new Date(e.t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     if (e.event) return `<div class="logline"><span class="when">${when}</span><div class="txt muted">— ${h(e.event)}: ${h(e.class||'')} ${h(e.assignment||'')}</div></div>`;
     const ok = e.result.startsWith('ok'), warned = e.result === 'warned' || e.result === 'sent after warning' || e.result === 'sent anyway';
@@ -411,10 +432,21 @@ async function paintLog() {
       ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
       <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
   }).join('');
-  $('#loglist').innerHTML = rows || '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>';
+  const pager = () => {
+    if (pg.pages <= 1) return '';
+    const nums = []; const add = n => { if (nums[nums.length - 1] !== n) nums.push(n); };
+    for (let i = 1; i <= pg.pages; i++) { if (i === 1 || i === pg.pages || Math.abs(i - pg.page) <= 1) add(i); else add('…'); }
+    const from = (pg.page - 1) * pg.per_page + 1, to = Math.min(pg.total, pg.page * pg.per_page);
+    return `<div class="pager"><div class="pager-info">${from}–${to} of ${pg.total}</div>
+      <div class="pager-ctl"><button class="pg arrow" data-pg="${pg.page - 1}" ${pg.page === 1 ? 'disabled' : ''} aria-label="Newer">‹</button>
+      ${nums.map(n => n === '…' ? '<span class="pg gap">…</span>' : `<button class="pg ${n === pg.page ? 'on' : ''}" data-pg="${n}">${n}</button>`).join('')}
+      <button class="pg arrow" data-pg="${pg.page + 1}" ${pg.page === pg.pages ? 'disabled' : ''} aria-label="Older">›</button></div></div>`;
+  };
+  $('#loglist').innerHTML = (rows || '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>') + pager();
+  $('#loglist').querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { LOGPAGE = +b.dataset.pg; paintLog(); $('#main').scrollTop = 0; });
   $('#exp').onclick = async () => { const p = await api().export_log(); if (p) toast('Saved to ' + p.split('/').pop()); };
   $('#clr').onclick = async () => { const pin = await askPin('Enter the PIN to clear the log.'); if (pin === null) return;
-    const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else paintLog(); };
+    const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else { LOGPAGE = 1; paintLog(); } };
 }
 
 // ---- History (study sessions) ----
@@ -440,7 +472,7 @@ async function paintHistory() {
     return `<div class="hrow">
       <div class="cal"><div class="m">${mon}</div><div class="d">${day}</div></div>
       <div class="mid"><div class="name">${h(sdef.class)}${sdef.assignment?' <span class="muted">/ '+h(sdef.assignment)+'</span>':''}</div>
-        <div class="sub">${time} · ${sdef.checks} checked${sdef.mode?(' · '+h(sdef.mode)+' mode'):''}</div></div>
+        <div class="sub">${time} · ${sdef.checks} checked</div></div>
       <div class="dur">${dur}</div>${badge}</div>`;
   }).join('');
   $('#histcard').outerHTML = `<div>${head}<div class="card">
@@ -491,7 +523,7 @@ function paintSettings() {
       <div id="extBody"></div>
     </div>
     <div class="card"><h2>Accountability PIN</h2>
-      <p class="sub">A friend or parent sets this. Then ending a session, switching to warn mode, deleting a class, or clearing the log needs it.</p>
+      <p class="sub">A friend or parent sets this. Then ending a session, deleting a class, or clearing the log needs it.</p>
       <div class="row">${S.has_pin?'<div class="field"><label>Current PIN</label><input type="password" id="op" inputmode="numeric"></div>':''}
         <div class="field"><label>${S.has_pin?'New PIN':'Set a PIN'}</label><input type="password" id="np" inputmode="numeric"></div></div>
       <div class="btnrow"><button class="btn ghost" id="pinbtn">${S.has_pin?'Change PIN':'Set PIN'}</button>

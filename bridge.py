@@ -6,7 +6,7 @@ from datetime import datetime
 import distill
 import docs
 import rules
-from store import TUTOR_CLASS
+from store import TUTOR_CLASS, COLORS
 import watcher
 from store import APP_DIR, new_id
 
@@ -35,8 +35,9 @@ class Api:
         today = datetime.now().replace(hour=0, minute=0, second=0).timestamp()
         msgs = [e for e in s.read_log(2000) if 'result' in e and e.get('t', 0) >= today]
         classes = []
-        for c in s.data['classes']:
+        for i, c in enumerate(s.data['classes']):
             c2 = {k: v for k, v in c.items() if k != 'source_text'}
+            c2['color'] = c.get('color') if c.get('color') in COLORS else COLORS[i % len(COLORS)]
             c2['has_source'] = bool(c.get('source_text'))
             c2['assignments'] = [dict({k: v for k, v in a.items() if k != 'source_text'},
                                       has_source=bool(a.get('source_text'))) for a in c.get('assignments', [])]
@@ -44,7 +45,8 @@ class Api:
         sess = None
         if cls:
             started = s.data['session'].get('started')
-            sess = {'class_id': cls['id'], 'class': cls['name'], 'policy': cls.get('policy'),
+            ccolor = cls.get('color') if cls.get('color') in COLORS + ['ink'] else COLORS[0]
+            sess = {'class_id': cls['id'], 'class': cls['name'], 'policy': cls.get('policy'), 'color': ccolor,
                     'assignment_id': asg['id'] if asg else None, 'assignment': asg['name'] if asg else '',
                     'started': started, 'elapsed': int(time.time() - started) if started else 0}
         return {
@@ -66,10 +68,8 @@ class Api:
     def start_session(self, class_id, assignment_id, mode):
         if not self._store.cls(class_id):
             return _err('Pick a class first.')
-        if mode == 'warn' and self._store.data.get('mode') == 'block' and self._store.data.get('pin'):
-            mode = 'block'  # loosening needs the PIN, done in Settings
         self._store.data['session'] = {'class_id': class_id, 'assignment_id': assignment_id or None, 'started': time.time()}
-        self._store.data['mode'] = mode if mode in ('warn', 'block') else 'warn'
+        self._store.data['mode'] = 'warn'
         self._store.save()
         c, a = self._store.session_targets()
         self._store.log({'t': time.time(), 'event': 'session start', 'class': c['name'],
@@ -202,6 +202,7 @@ class Api:
             self._store.data['classes'].append(c)
         c.update({'name': name, 'policy': draft.get('policy') or 'tutor',
                   'rules': self._clean_rules(draft.get('rules')), 'examples': self._clean_examples(draft.get('examples')),
+                  'color': draft.get('color') if draft.get('color') in COLORS else c.get('color', COLORS[0]),
                   'policy_text': str(draft.get('policy_text', '')).strip()[:4000],
                   'category_reason': str(draft.get('category_reason', '')).strip()})
         if draft.get('source_text'):
@@ -313,6 +314,14 @@ class Api:
     def get_log(self, limit=200):
         return list(reversed(self._store.read_log(limit)))
 
+    def get_log_page(self, page=1, per_page=25):
+        rows = list(reversed(self._store.read_log()))
+        per_page = max(5, min(int(per_page or 25), 100))
+        pages = max(1, -(-len(rows) // per_page))
+        page = max(1, min(int(page or 1), pages))
+        return {'rows': rows[(page - 1) * per_page: page * per_page], 'page': page, 'pages': pages,
+                'total': len(rows), 'per_page': per_page}
+
     def export_log(self):
         import webview
         kind = webview.FileDialog.SAVE if hasattr(webview, 'FileDialog') else webview.SAVE_DIALOG
@@ -355,6 +364,7 @@ class Api:
             cfg['ollama_model'] = ollama_model.strip()
         self._store.save()
         self._app.judge.forget()
+        self._app.engine.override = None
         self._app.engine.start()
         return self.state()
 

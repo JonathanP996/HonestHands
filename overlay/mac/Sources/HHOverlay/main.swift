@@ -62,7 +62,7 @@ struct ActionButton: View {
     let style: Style
     let tint: Color
     let action: () -> Void
-    enum Style { case primary, secondary, quiet }
+    enum Style { case primary, danger, secondary, quiet }
     @State private var hover = false
     var body: some View {
         Button(action: action) {
@@ -72,10 +72,10 @@ struct ActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .foregroundStyle(style == .primary ? Color.black.opacity(0.85) : Color.primary)
+            .foregroundStyle(style == .primary ? Color.black.opacity(0.85) : style == .danger ? Color.white : Color.primary)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(style == .primary ? tint : Color.primary.opacity(hover ? 0.14 : (style == .secondary ? 0.08 : 0.0)))
+                    .fill(style == .primary || style == .danger ? tint : Color.primary.opacity(hover ? 0.14 : (style == .secondary ? 0.08 : 0.0)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -97,7 +97,9 @@ struct CardView: View {
     @State private var shown = [Bool](repeating: false, count: 7)
 
     var hard: Bool { m.cmd.hard ?? false }
-    var accent: Color { hard ? Color(red: 0.93, green: 0.40, blue: 0.36) : Color(red: 0.86, green: 0.70, blue: 0.34) }
+    // The alert is red; only "Edit my message" is green.
+    var accent: Color { Color(red: 0.90, green: 0.36, blue: 0.34) }
+    var green: Color { Color(red: 0.42, green: 0.78, blue: 0.62) }
 
     func reveal(_ i: Int) -> some ViewModifier { Reveal(on: shown[i], delay: Double(i) * 0.05) }
 
@@ -110,7 +112,7 @@ struct CardView: View {
                         ZStack {
                             Ripple(color: accent, trigger: m.pulse).frame(width: 34, height: 34)
                             Circle().fill(accent.opacity(0.2)).frame(width: 34, height: 34)
-                            Image(systemName: hard ? "hand.raised.fill" : "exclamationmark.triangle.fill")
+                            Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 15, weight: .bold)).foregroundStyle(accent)
                                 .symbolEffect(.bounce, value: m.pulse)
                         }
@@ -154,9 +156,9 @@ struct CardView: View {
                             VStack(spacing: 8) {
                                 HStack(spacing: 8) {
                                     ActionButton(title: hard ? "OK, I’ll edit it" : "Edit my message", hint: "↩",
-                                                 style: .primary, tint: accent) { m.onChoice("edit") }
+                                                 style: .primary, tint: green) { m.onChoice("edit") }
                                     if m.cmd.allowSend ?? !hard {
-                                        ActionButton(title: "Send it now", hint: "⌘↩", style: .secondary, tint: accent) { m.onChoice("send_anyway") }
+                                        ActionButton(title: "Send it now", hint: "⌘↩", style: .danger, tint: accent) { m.onChoice("send_anyway") }
                                     }
                                 }
                                 if m.cmd.allowSend ?? !hard {

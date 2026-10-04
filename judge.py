@@ -1,27 +1,29 @@
 """The judge: keyword rules first (instant), then the AI for everything else."""
 import hashlib
+import re
 import threading
 import time
 
 import docs
 import rules
+from engine import parse_json as engine_parse
 
 SYSTEM = """You are the professor of this course. You wrote the AI policy below and you uphold it. A student is about to send a message to an AI chatbot while working on your class. Decide as you would in real life: are you comfortable with this student sending this message?
 
-Think like a professor, not a keyword filter. Ask yourself: does this read like the student collaborating with a peer, tutor, or TA, genuinely trying to learn, understand, or get feedback on their own work? Or does it read like the student outsourcing the work, getting content or answers they would hand in as their own, or getting around what your policy asks of them? Your policy, exactly as written, is the standard, whatever it permits or forbids: no AI at all, tutoring only, collaboration treated like working with a classmate, a named exception, disclosure rules, "don't copy from the chat," "don't use AI inside your editor," and so on. Where the policy is permissive, don't flag ordinary learning questions. Where it forbids something, flag messages that ask for it. If the policy doesn't speak to the message and nothing about it looks like cheating, allow it. If the message is clearly unrelated to schoolwork, allow it.
+Think like a professor, not a keyword filter. Ask yourself: does this read like the student collaborating with a peer, tutor, or TA, genuinely trying to learn, understand, or get feedback on their own work? Or does it read like the student outsourcing the work, getting content or answers they would hand in as their own, or getting around what your policy asks of them? Your policy, exactly as written, is the standard. Where it is permissive, don't flag ordinary learning questions. Where it forbids something (for example formatting help, writing help, or sharing the question or the student's answer with an AI), flag messages that ask for it, even if the student says the work is their own. If the policy doesn't speak to the message and nothing about it looks like cheating, allow it. If the message is clearly unrelated to schoolwork, allow it.
 
-Verdicts: "allow" (you're comfortable), "warn" (you're not sure, or it's borderline), "block" (clearly outside what you'd accept).
+Verdicts: "allow" (you're comfortable), "warn" (borderline or unsure), "block" (clearly outside what you'd accept).
 Judge what the message asks the AI to DO, not its topic: "help me understand X" differs from "write X for me."
-An assignment's own notes can add rules for that assignment; "assignment rules override class rules" is never itself a rule.
+An assignment's own notes can add rules for that assignment; they apply on top of the class policy.
 
-When you warn or block, answer in a professor's voice, specific to THIS message:
-- "reason": one sentence on what the message is asking for and why you're not comfortable.
-- "rule": the part of your policy it conflicts with, in plain words. Empty only if nothing specific applies.
-- "quote": the exact words from your policy that back this up, copied verbatim, or empty.
-- "suggestion": one short, concrete thing the student could ask instead.
+Be brief. Every field is one short line. For "allow", leave the other fields empty.
+- "rule": the part of your policy it conflicts with, at most 10 words, in your own words.
+- "reason": at most 20 words, a professor's voice, specific to THIS message.
+- "quote": at most 20 words copied exactly from your policy, or empty.
+- "suggestion": at most 15 words, something the student could ask instead.
 
-Reply with JSON only:
-{"verdict":"allow"|"warn"|"block","reason":"...","rule":"...","quote":"...","suggestion":"..."}"""
+Reply with JSON only, with the verdict first:
+{"verdict":"allow"|"warn"|"block","rule":"...","reason":"...","quote":"...","suggestion":"..."}"""
 
 LABELS = {'allowed': 'ALLOWED', 'not_allowed': 'NOT ALLOWED', 'condition': 'CONDITION', 'exception': 'EXCEPTION'}
 
@@ -37,6 +39,22 @@ STARTER_TESTS = {
         ('Complete this function for my assignment so it passes the tests.', 'block'),
     ],
 }
+
+
+def parse_verdict(text):
+    """Reads the judge's JSON; if the reply was cut off, still recovers the verdict and any complete fields."""
+    try:
+        return engine_parse(text)
+    except Exception:
+        pass
+    out = {}
+    for k in ('verdict', 'rule', 'reason', 'quote', 'suggestion'):
+        m = re.search(r'"%s"\s*:\s*"((?:[^"\\]|\\.)*)"' % k, text)
+        if m:
+            out[k] = m.group(1).replace('\\"', '"')
+    if 'verdict' not in out:
+        raise ValueError('the model did not return a verdict')
+    return out
 
 
 def _rules_text(items):
@@ -84,6 +102,7 @@ class Judge:
         self.store, self.engine = store, engine
         self.cache = {}
         self.inflight = set()
+        self.pending = {}     # key -> Event, so the same message is only judged once at a time
         self.lock = threading.Lock()
 
     @staticmethod
@@ -104,6 +123,27 @@ class Judge:
             hit = self.cached(text, cls, asg)
             if hit:
                 return hit
+            with self.lock:
+                ev = self.pending.get(k)
+                mine = ev is None
+                if mine:
+                    self.pending[k] = ev = threading.Event()
+            if not mine:                      # someone else is already judging this exact message
+                ev.wait(timeout=timeout + 5)
+                hit = self.cached(text, cls, asg)
+                if hit:
+                    return hit
+        else:
+            ev = None
+        try:
+            return self._check(text, cls, asg, where, timeout, k)
+        finally:
+            if ev is not None:
+                with self.lock:
+                    self.pending.pop(k, None)
+                ev.set()
+
+    def _check(self, text, cls, asg, where, timeout, k):
         t0 = time.time()
         kw = rules.check(text, cls, asg)
 
@@ -117,7 +157,7 @@ class Judge:
                 result['note'] = 'The AI judge isn\'t ready, so keyword rules were used.'
         else:
             try:
-                out = self.engine.chat_json(SYSTEM, build_prompt(text, cls, asg, where), timeout=timeout, max_tokens=120)
+                out = parse_verdict(self.engine.chat_raw(SYSTEM, build_prompt(text, cls, asg, where), timeout=timeout, max_tokens=170))
                 v = str(out.get('verdict', '')).strip().lower()
                 if v not in ('allow', 'warn', 'block'):
                     raise ValueError('unexpected verdict')

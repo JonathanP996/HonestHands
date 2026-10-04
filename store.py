@@ -33,7 +33,8 @@ Heuristic 1: Never hit "Copy" within your conversation with an AI assistant. You
 Heuristic 2: Do not have your assignment and the AI agent open at the same time. Use your conversation with the AI as a learning experience, then close the interaction down, open your assignment, and let your assignment reflect your revised knowledge. This heuristic includes avoiding using AI directly integrated into your composition environment: just as you should not let a classmate write content or code directly into your submission, so also you should avoid using tools that directly add content to your submission.
 
 Deviating from these heuristics does not automatically qualify as academic misconduct; however, following these heuristics essentially guarantees your collaboration will not cross the line into misconduct."""
-TUTOR_CLASS = {'id': TUTOR_ID, 'name': 'Tutor mode', 'policy': 'tutor', 'policy_text': TUTOR_POLICY,
+COLORS = ['lav', 'mint', 'sun', 'sky', 'rose', 'peach', 'sage', 'sand']
+TUTOR_CLASS = {'id': TUTOR_ID, 'name': 'Tutor mode', 'policy': 'tutor', 'color': 'ink', 'policy_text': TUTOR_POLICY,
                'rules': [], 'examples': [], 'assignments': [], 'builtin': True}
 
 

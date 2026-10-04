@@ -704,12 +704,7 @@ class Guard:
         self.resend(trigger, loc)
 
     def is_hard(self, r):
-        if r.get('hard'):
-            return True
-        mode = self.store.data.get('mode', 'warn')
-        if r.get('source') == 'ai':
-            return mode == 'block' and r.get('verdict') == 'block'
-        return mode == 'block'
+        return False   # one behaviour for everything: warn, with Edit / Send it now (logged)
 
     def act(self, r, p, cls, asg, trigger):
         if r['level'] in ('ok', 'note'):
@@ -745,6 +740,8 @@ class Guard:
         if r:
             entry['source'] = r.get('source')
             entry['ms'] = r.get('ms')
+            if r.get('note'):
+                entry['note'] = r['note']
             if r.get('level') == 'flag':
                 entry['reasons'] = r.get('reasons')
         self.store.log(entry)
