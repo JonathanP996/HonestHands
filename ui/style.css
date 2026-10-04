@@ -597,3 +597,4 @@ body.morphing .sb-in{animation:none;opacity:0}
 .sb-in{opacity:0;transform:translateY(16px);animation:sbin .7s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--i,0) * 90ms)}
 @keyframes sbin{to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.sessbig::before,.sessbig::after,.sb-live i{animation:none!important}.sb-in{animation:none;opacity:1;transform:none}}
+.sb-stats .ok b{color:#1f7a55}.sessbig.cc-ink .sb-stats .ok b{color:#7fd0ab}

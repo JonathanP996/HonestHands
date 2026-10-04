@@ -259,7 +259,7 @@ function paintHome() {
         </div>
         <div class="sb-bot sb-in" style="--i:5">
           <div class="sb-stats">
-            <div><b id="sb-n-today">0</b><span>checked today</span></div>
+            <div class="ok"><b id="sb-n-today">0</b><span>clean</span></div>
             <div><b id="sb-n-flag">0</b><span>flagged</span></div>
             <div class="bad"><b id="sb-n-over">0</b><span>overridden</span></div>
           </div>
@@ -267,7 +267,7 @@ function paintHome() {
         </div>
       </div>
       <p class="small muted center" style="margin-top:14px">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
-    countTo($('#sb-n-today'), st.today || 0, { dur: 900 }); countTo($('#sb-n-flag'), st.flagged || 0, { dur: 900 }); countTo($('#sb-n-over'), st.overridden || 0, { dur: 900 });
+    countTo($('#sb-n-today'), st.clean || 0, { dur: 900 }); countTo($('#sb-n-flag'), st.flagged || 0, { dur: 900 }); countTo($('#sb-n-over'), st.overridden || 0, { dur: 900 });
     startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
     $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
       const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };
