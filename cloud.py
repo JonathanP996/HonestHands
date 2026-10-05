@@ -413,13 +413,13 @@ class Cloud:
                 who = (m.get('sender') or {}).get('display_name') or 'A friend'
                 b = m['body']
                 if m.get('kind') == 'system' and b[:1] in ('\U0001F44D', '\U0001F44E'):
-                    watcher.notify('HonestHands', f"{who} gave your prompt a thumbs {'up' if b[0] == chr(0x1F44D) else 'down'}: {b.split(chr(10), 1)[-1][:70]}")
+                    watcher.notify('HonestHands', f"{who} gave your prompt a thumbs {'up' if b[0] == chr(0x1F44D) else 'down'}: {b.split(chr(10), 1)[-1][:70]}", 'messages')
                 else:
-                    watcher.notify('HonestHands', f"{who}: {b[:90]}")
+                    watcher.notify('HonestHands', f"{who}: {b[:90]}", 'messages')
             self._seen_ids.add(m['id'])
         for r in pending:
             if r['id'] not in self._seen_ids and not first and watcher:
-                watcher.notify('HonestHands', f"{(r.get('who') or {}).get('display_name') or 'A friend'} is asking you to release them from a locked-in session")
+                watcher.notify('HonestHands', f"{(r.get('who') or {}).get('display_name') or 'A friend'} is asking you to release them from a locked-in session", 'community')
             self._seen_ids.add(r['id'])
 
     def exit_paths(self):
@@ -651,4 +651,4 @@ class Cloud:
             self.c['last_notified_t'] = max(from_iso(e['at']) for e in fresh)
             self._save()
             who = (fresh[0].get('who') or {}).get('display_name') or 'A friend'
-            watcher.notify('HonestHands', f'{who} sent a prompt despite a warning' + (f' (+{len(fresh) - 1} more)' if len(fresh) > 1 else ''))
+            watcher.notify('HonestHands', f'{who} sent a prompt despite a warning' + (f' (+{len(fresh) - 1} more)' if len(fresh) > 1 else ''), 'community')

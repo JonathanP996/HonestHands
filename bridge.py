@@ -581,7 +581,7 @@ class Api:
         return True
 
     def test_notification(self):
-        watcher.notify('HonestHands', 'This is how a warning from your guard will look.')
+        watcher.notify('HonestHands', 'This is how a warning from your guard will look. Click it to come back to the app.', 'settings')
         return True
 
     def open_notification_settings(self):

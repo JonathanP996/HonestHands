@@ -55,6 +55,7 @@ from ai_guard import AIGuard
 import cloud
 import keepalive
 import lock
+import notifier
 import sparkle
 import updates
 from store import Store
@@ -112,13 +113,27 @@ class App:
         self._ext_last_ping = 0.0
         self._ext_pings = {}        # browser key -> time of the extension's last check-in
 
+    def _setup_notifications(self):
+        notifier.setup(self._notification_clicked)
+
+    def _notification_clicked(self, action):
+        """A HonestHands alert was clicked: bring the app forward, on the right tab."""
+        def go():
+            self.show_window()
+            if action in ('messages', 'community', 'home', 'settings'):
+                try:
+                    self.window.evaluate_js("typeof paint === 'function' && S && S.onboarded && (TAB = '%s', paint())" % action)
+                except Exception:
+                    pass
+        AppHelper.callAfter(go)
+
     def _start_updates(self):
         """Installed app: Sparkle updates it by itself. From source: the plain banner."""
         sparkle.start()                 # installs the update when the person says yes
         self.updater.start()            # notices a new build and drives the in-app popup (works with or without Sparkle)
 
     def _update_found(self, latest):
-        watcher.notify('HonestHands', f"A new version is ready{(' (' + latest['version'] + ')') if latest.get('version') else ''}. Open HonestHands to update.")
+        watcher.notify('HonestHands', f"A new version is ready{(' (' + latest['version'] + ')') if latest.get('version') else ''}. Open HonestHands to update.", 'home')
 
     # ---------- timed lock-in ----------
     def locked_now(self):
@@ -286,6 +301,7 @@ class App:
         self.engine.autostart()
         self.cloud.start()
         AppHelper.callAfter(self._start_updates)
+        AppHelper.callAfter(self._setup_notifications)
         threading.Thread(target=self._lock_tick, daemon=True).start()
         (keepalive.install if self.locked_now() else keepalive.remove)()     # a stale watcher must never outlive its lock-in
         AppHelper.callAfter(self.lock.start)           # app-switch notifications must be registered on the main thread

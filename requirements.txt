@@ -8,3 +8,4 @@ pyinstaller>=6.10
 llama-cpp-python[server]>=0.3.2
 certifi
 pyobjc-framework-SafariServices>=10.3
+pyobjc-framework-UserNotifications>=10.3

@@ -78,7 +78,7 @@ pyinstaller --noconfirm --windowed --name "$APP" $ICONFLAG \
   --add-data "overlay/bin:overlay/bin" \
   --osx-bundle-identifier "com.honesthands.app" \
   --collect-all llama_cpp \
-  --hidden-import net --hidden-import updates --hidden-import version --hidden-import rules --hidden-import store --hidden-import engine --hidden-import ai_guard \
+  --hidden-import net --hidden-import notifier --hidden-import UserNotifications --hidden-import updates --hidden-import version --hidden-import rules --hidden-import store --hidden-import engine --hidden-import ai_guard \
   --hidden-import distill --hidden-import docs --hidden-import watcher --hidden-import bridge --hidden-import overlay_client \
   main.py
 

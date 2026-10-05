@@ -530,7 +530,12 @@ def remember_typed():
         pass
 
 
-def notify(title, message):
+def notify(title, message, action=''):
+    """A macOS alert. Sent as HonestHands itself when running as the installed app; action ('messages', 'community'...) is
+    the tab to open when it's clicked."""
+    import notifier
+    if notifier.send(title, message, action):
+        return
     subprocess.Popen(['osascript', '-e', f'display notification {applescript_str(message)} with title {applescript_str(title)}'])
 
 

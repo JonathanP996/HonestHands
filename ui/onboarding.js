@@ -71,7 +71,7 @@ function stepAccess() {
               : ONB_FLAGS.notifTried ? '<div class="obtns"><button class="osm" id="o-notif-yes">I saw it</button><button class="osm ghost" id="o-notif-no">No</button></div>'
                                      : '<button class="osm ghost" id="o-notif">Test</button>'}
     </div>
-    ${ONB_FLAGS.notifTried && !notif ? '<p class="onote">Didn’t see it? Turn on notifications for <b>Script Editor</b>. <a href="#" id="o-notif-open">Open settings</a></p>' : ''}`;
+    ${ONB_FLAGS.notifTried && !notif ? '<p class="onote">Didn’t see it? Make sure notifications are on for <b>HonestHands</b>. <a href="#" id="o-notif-open">Open settings</a></p>' : ''}`;
   return ostage({ art: 'access', title: 'Let it watch for sends',
     sub: 'macOS needs your OK first. This is what lets the guard read a message and pause it for a check.', body,
     next: nextBtn(acc ? 'Next' : 'Continue anyway') });
