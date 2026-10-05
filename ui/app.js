@@ -230,7 +230,7 @@ function paintHome() {
       (selMin === -1 ? `<span class="durcustom"><input id="cmin" type="number" min="1" max="720" value="${customMin}"><span>minutes</span></span>` : '');
     const mins = minutes(), ex = S.exit || { pin: false, friends: 0 }, can = ex.pin || ex.friends > 0;
     const until = new Date(Date.now() + mins * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    $('#durnote').innerHTML = !mins ? `<div class="lockbox soft"><b>No timer</b><span>You can end the session whenever you like${ex.pin ? ' (with your PIN)' : ''}. We encourage using a timer for accountability's sake: it's what stops “just five more minutes”, and it lets a friend hold you to it.</span></div>`
+    $('#durnote').innerHTML = !mins ? `<div class="lockbox soft"><b>No timer</b><span>You can end the session whenever you like${ex.pin ? ' (with your PIN)' : ''}. We encourage using a timer for accountability's sake: it's what stops “it's just one question, no one will care”, and it lets a friend hold you to it.</span></div>`
       : `<div class="lockbox ${can ? '' : 'warn'}"><b>Locked in until ${until}.</b>
           <span>You won't be able to quit or end it early. The only ways out: ${ex.pin ? 'your <b>PIN</b>' : ''}${ex.pin && ex.friends ? ' or ' : ''}${ex.friends ? `a <b>friend</b> releasing you (${ex.friends} can)` : ''}${can ? '.' : ''}</span>
           ${can ? '' : `<span>You don't have a way out yet, and a timed lock needs one for emergencies.</span><div class="btnrow" style="margin-top:8px">
