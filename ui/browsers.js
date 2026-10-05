@@ -35,6 +35,10 @@ function browserPanelHTML() {
       <button class="btn ghost" data-act="page" ${ready ? '' : 'disabled'}>Open Firefox</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Choose the file named manifest.json</b><span>It’s inside the Downloads folder you just saved. Firefox forgets temporary add-ons when it quits, so repeat this after a restart.</span></div>
       <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
+  else if (kind === 'safari' && ext.bundled) steps = `
+    <li class="done"><div><b>The Safari extension is built in</b><span>Nothing to download or build. Keep HonestHands in your Applications folder.</span></div></li>
+    <li><div><b>Turn it on in Safari</b><span>Tick <em>HonestHands Extension</em>, then allow it on the AI sites (Always Allow, or Always Allow on Every Website).</span></div>
+      <button class="btn" data-act="page">Open Safari’s switch</button></li>`;
   else if (kind === 'safari') steps = `
     <li class="${ready ? 'done' : ''}"><div><b>Build the Safari extension</b><span>Takes about 15 seconds. Needs Xcode installed (free in the App Store).</span></div>
       <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Build again' : 'Build for Safari'}</button></li>

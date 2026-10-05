@@ -229,8 +229,10 @@ class Api:
         return extensions.dest_for(browserlib.BROWSERS[key]['kind'])
 
     def _extension_status(self):
-        d = self._ext_dir()
         key = self._chosen()
+        if key == 'safari' and extensions.bundled_safari():
+            return {'installed_dir': str(extensions.bundled_safari()), 'kind': 'safari', 'bundled': True}
+        d = self._ext_dir()
         have = d.exists() and (any(d.glob('*.app')) if key == 'safari' else (d / 'manifest.json').exists())
         return {'installed_dir': str(d) if have else '', 'kind': browserlib.BROWSERS[key]['kind'] if key else ''}
 
@@ -284,6 +286,8 @@ class Api:
             return _err('Choose your browser first.')
         info = browserlib.BROWSERS[key]
         try:
+            if key == 'safari' and extensions.bundled_safari() and extensions.show_in_safari():
+                return True                                   # opened Safari right on the extension's switch
             subprocess.Popen(['open', '-b', info['bundle']] + ([info['page']] if info['page'] else []))
             return True
         except Exception as e:

@@ -87,18 +87,57 @@ PLIST="dist/$APP.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string 'Needed to check your AI messages against your class rules.'" "$PLIST" 2>/dev/null || true
 
+# Safari's extension has to live inside a signed app. Build it with Apple's converter + Xcode and put it inside HonestHands.app, so
+# Safari users only switch it on (no Xcode, no "Allow Unsigned Extensions").
+SAFARI_APPEX=""
+if command -v xcodebuild >/dev/null && xcrun --find safari-web-extension-converter >/dev/null 2>&1; then
+  echo "==> Building the Safari extension"
+  SW="$(pwd)/build/safari"; rm -rf "$SW"; mkdir -p "$SW"
+  python3 - "$SW" <<'PY'
+import json, shutil, sys
+sys.path.insert(0, ".")
+import extensions
+sw = sys.argv[1]
+shutil.copytree("extension", sw + "/web")
+m = json.load(open("extension/manifest.json"))
+open(sw + "/web/manifest.json", "w").write(json.dumps(extensions.mv2_manifest(m), indent=2))
+PY
+  xcrun safari-web-extension-converter "$SW/web" --project-location "$SW/proj" --app-name HonestHands --bundle-identifier com.honesthands.app \
+    --macos-only --no-open --no-prompt --force >/dev/null 2>&1
+  XPROJ=$(ls -d "$SW"/proj/*/HonestHands.xcodeproj | head -1)
+  sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.honesthands.HonestHands;/PRODUCT_BUNDLE_IDENTIFIER = com.honesthands.app;/' "$XPROJ/project.pbxproj"
+  xcodebuild -project "$XPROJ" -scheme HonestHands -configuration Release -derivedDataPath "$SW/out" CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build >"$SW/xcode.log" 2>&1 || true
+  SAFARI_APPEX="$SW/out/Build/Products/Release/HonestHands Extension.appex"
+  # xcodebuild registered its scratch build with Launch Services: take that back so Safari only sees the real one
+  /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -u "$SW/out/Build/Products/Release/HonestHands.app" >/dev/null 2>&1 || true
+  if [ -d "$SAFARI_APPEX" ]; then
+    mkdir -p "dist/$APP.app/Contents/PlugIns"
+    cp -R "$SAFARI_APPEX" "dist/$APP.app/Contents/PlugIns/"
+    BUILDNO=$(python3 -c "import re;print(re.search(r'BUILD = (\d+)', open('version.py').read()).group(1))")
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILDNO" "dist/$APP.app/Contents/PlugIns/HonestHands Extension.appex/Contents/Info.plist" 2>/dev/null || true
+  else
+    echo "   (the Safari extension did not build; see $SW/xcode.log. Continuing without it.)"
+  fi
+else
+  echo "==> Xcode not found: skipping the built-in Safari extension"
+fi
+
 # Sign: with the Developer ID certificate if this Mac has one (then Apple can notarize it and macOS opens it without warnings),
 # otherwise ad-hoc. Editing Info.plist above invalidated the first signature, so every file is signed again, inside-out.
 IDENT=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
 APPDIR="dist/$APP.app"
 if [ -n "$IDENT" ]; then
   echo "==> Signing with: $IDENT"
-  find "$APPDIR" -type f \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) | while read -r f; do
+  find "$APPDIR" -type f -not -path "*/PlugIns/*" \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) | while read -r f; do
     file -b "$f" | grep -q "Mach-O" && codesign --force --options runtime --timestamp --entitlements entitlements.plist --sign "$IDENT" "$f"
+  done
+  for X in "$APPDIR"/Contents/PlugIns/*.appex; do      # the Safari extension is sandboxed: its own entitlements, signed before the app
+    [ -d "$X" ] && codesign --force --options runtime --timestamp --entitlements safari.entitlements --sign "$IDENT" "$X"
   done
   codesign --force --options runtime --timestamp --entitlements entitlements.plist --sign "$IDENT" "$APPDIR"
 else
   echo "==> No Developer ID certificate here: signing ad-hoc (people will see an 'unverified developer' warning)"
+  for X in "$APPDIR"/Contents/PlugIns/*.appex; do [ -d "$X" ] && codesign --force --entitlements safari.entitlements --sign - "$X"; done
   codesign --force --deep --sign - "$APPDIR"
 fi
 codesign --verify --deep --strict "$APPDIR"

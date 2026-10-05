@@ -62,8 +62,41 @@ def prepare(kind, source=None, dest=None):
         (dest / 'manifest.json').write_text(json.dumps(mv2_manifest(manifest, firefox=True), indent=2))
         return {'dir': str(dest), 'file': str(dest / 'manifest.json')}
     if kind == 'safari':
+        built_in = bundled_safari()
+        if built_in:
+            return {'dir': str(built_in), 'bundled': True}        # nothing to build: it ships inside the app
         return _prepare_safari(src, manifest, dest)
     raise RuntimeError('Unknown browser type.')
+
+
+def bundled_safari():
+    """The app that carries the ready-made Safari extension (this app, when installed), or None when run from source."""
+    try:
+        contents = Path(sys.executable).resolve().parents[1]
+        if contents.name == 'Contents' and any((contents / 'PlugIns').glob('*.appex')):
+            return contents.parent
+    except Exception:
+        pass
+    return None
+
+
+SAFARI_EXT_ID = 'com.honesthands.app.Extension'
+
+
+def show_in_safari():
+    """Open Safari straight to this extension's switch (Settings > Extensions). False if Safari can't do that here, so the
+    caller can just open Safari instead."""
+    try:
+        import threading
+        import SafariServices
+        done, out = threading.Event(), []
+        def handler(err):
+            out.append(err)
+            done.set()
+        SafariServices.SFSafariApplication.showPreferencesForExtensionWithIdentifier_completionHandler_(SAFARI_EXT_ID, handler)
+        return bool(done.wait(3) and out and out[0] is None)
+    except Exception:
+        return False
 
 
 def _have_xcode():
