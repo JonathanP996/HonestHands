@@ -36,7 +36,8 @@ def code_is_429(pgc):
 
 
 def iso(t):
-    return datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
+    # 'Z' not '+00:00': this goes into URLs, where a '+' turns into a space and the database rejects the time
+    return datetime.fromtimestamp(t, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 def from_iso(s):
