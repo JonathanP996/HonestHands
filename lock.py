@@ -38,6 +38,7 @@ class SessionLock:
         self.last_ok = None            # the last allowed app that was in front: where to put you back
         self._observer = None
         self.blocked = 0
+        self._strikes = {}
         self._last_msg = {}            # app name -> when we last told them (so repeated tries don't stack popups)
 
     def active(self):
@@ -71,9 +72,14 @@ class SessionLock:
                     if not blocked_reason(bid, name, cfg, chosen, self.is_ai_app):
                         continue
                     if front is not None and app.processIdentifier() == front.processIdentifier():
+                        n = self._strikes[bid] = self._strikes.get(bid, 0) + 1
                         AppHelper.callAfter(self.handle, bid, name, app)     # in front: turn them back, with the note
-                    elif not app.isHidden():
-                        AppHelper.callAfter(app.hide)                        # open behind something else: still out of sight
+                        if n % 3 == 0:                                       # still there after a second or so: full screen, probably
+                            threading.Thread(target=self._put_away, args=(app,), daemon=True).start()
+                    else:
+                        self._strikes.pop(bid, None)
+                        if not app.isHidden():
+                            AppHelper.callAfter(app.hide)                    # open behind something else: still out of sight
             except Exception as e:
                 print('[lock] front check problem:', e, flush=True)
 
@@ -108,8 +114,28 @@ class SessionLock:
         try:
             if not app.isHidden():
                 from PyObjCTools import AppHelper
-                AppHelper.callAfter(app.hide)
+                AppHelper.callAfter(self._put_away, app)
                 AppHelper.callAfter(self._return_to_work)
+        except Exception:
+            pass
+
+    def _put_away(self, app):
+        """Hiding doesn't work on a full-screen app (you can just swipe back to its Space). So step out of full screen and
+        minimize its windows through Accessibility (nothing is closed or lost), then hide it."""
+        try:
+            from ApplicationServices import (AXUIElementCopyAttributeValue, AXUIElementCreateApplication, AXUIElementSetAttributeValue)
+            ax = AXUIElementCreateApplication(app.processIdentifier())
+            err, wins = AXUIElementCopyAttributeValue(ax, 'AXWindows', None)
+            for w in (wins or []):
+                AXUIElementSetAttributeValue(w, 'AXFullScreen', False)
+            time.sleep(0.9)                                   # let the full-screen animation finish before minimizing
+            err, wins = AXUIElementCopyAttributeValue(ax, 'AXWindows', None)
+            for w in (wins or []):
+                AXUIElementSetAttributeValue(w, 'AXMinimized', True)
+        except Exception as e:
+            print('[lock] could not minimize:', e, flush=True)
+        try:
+            app.hide()
         except Exception:
             pass
 
