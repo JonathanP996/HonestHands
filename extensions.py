@@ -23,8 +23,10 @@ def source_dir():
 
 
 def dest_for(kind):
-    # Chrome/Edge keep the original folder, so an already-loaded extension keeps working
-    return {'chromium': APP_DIR / 'extension', 'firefox': APP_DIR / 'extension-firefox', 'safari': APP_DIR / 'extension-safari'}[kind]
+    # Chrome/Edge/Firefox load straight from a folder, so it goes somewhere easy to find: the Downloads folder.
+    downloads = Path.home() / 'Downloads'
+    return {'chromium': downloads / 'HonestHands Extension', 'firefox': downloads / 'HonestHands Extension (Firefox)',
+            'safari': APP_DIR / 'extension-safari'}[kind]
 
 
 def _fresh_copy(src, dest):

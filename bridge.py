@@ -254,7 +254,9 @@ class Api:
         d = self._ext_dir()
         if not d.exists():
             self.prepare_extension()
-        subprocess.Popen(['open', str(d)])
+        key = self._chosen()
+        # show the folder itself, selected in Finder, so it is obvious which one to pick in the browser
+        subprocess.Popen(['open', '-R', str(d)] if key != 'safari' else ['open', str(d)])
         return True
 
     def set_lock(self, browsers_on, ai_apps_on):

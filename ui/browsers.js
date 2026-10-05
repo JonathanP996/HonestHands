@@ -22,19 +22,19 @@ function browserPanelHTML() {
   const ready = !!ext.installed_dir;
   let steps = '';
   if (kind === 'chromium') steps = `
-    <li class="${ready ? 'done' : ''}"><div><b>Copy the extension files</b><span>Puts them in a folder ${name} can load.</span></div>
-      <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Copy again' : 'Copy files'}</button></li>
+    <li class="${ready ? 'done' : ''}"><div><b>Download the extension</b><span>Saves a folder called <em>HonestHands Extension</em> to your Downloads. Keep it there: ${name} reads the extension from it.</span></div>
+      <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Download again' : 'Download'}</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Open ${name}’s extensions page</b><span>Switch on <em>Developer mode</em> (top right).</span></div>
       <button class="btn ghost" data-act="page" ${ready ? '' : 'disabled'}>Open ${name}</button></li>
-    <li class="${ready ? '' : 'dim'}"><div><b>Click “Load unpacked” and choose the folder</b><span>It stays on after that.</span></div>
-      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show the folder</button></li>`;
+    <li class="${ready ? '' : 'dim'}"><div><b>Click “Load unpacked” and choose that folder</b><span>It’s the <em>HonestHands Extension</em> folder in Downloads. It stays on after that.</span></div>
+      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
   else if (kind === 'firefox') steps = `
-    <li class="${ready ? 'done' : ''}"><div><b>Prepare the Firefox files</b><span>Same extension, packaged the way Firefox wants it.</span></div>
-      <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Prepare again' : 'Prepare files'}</button></li>
+    <li class="${ready ? 'done' : ''}"><div><b>Download the Firefox extension</b><span>Saves a folder called <em>HonestHands Extension (Firefox)</em> to your Downloads, packaged the way Firefox wants it.</span></div>
+      <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Download again' : 'Download'}</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Open Firefox’s add-on debugging page</b><span>Click <em>Load Temporary Add-on…</em></span></div>
       <button class="btn ghost" data-act="page" ${ready ? '' : 'disabled'}>Open Firefox</button></li>
-    <li class="${ready ? '' : 'dim'}"><div><b>Choose the file named manifest.json</b><span>Inside the folder. Firefox forgets temporary add-ons when it quits, so repeat this after a restart.</span></div>
-      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show the folder</button></li>`;
+    <li class="${ready ? '' : 'dim'}"><div><b>Choose the file named manifest.json</b><span>It’s inside the Downloads folder you just saved. Firefox forgets temporary add-ons when it quits, so repeat this after a restart.</span></div>
+      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
   else if (kind === 'safari') steps = `
     <li class="${ready ? 'done' : ''}"><div><b>Build the Safari extension</b><span>Takes about 15 seconds. Needs Xcode installed (free in the App Store).</span></div>
       <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Build again' : 'Build for Safari'}</button></li>
@@ -57,7 +57,7 @@ function wireBrowserPanel(root, onChange) {
   });
   const act = (name, fn) => root.querySelectorAll(`[data-act="${name}"]`).forEach(b => b.onclick = () => fn(b));
   act('prep', async (b) => {
-    const label = b.textContent; b.disabled = true; b.textContent = (S.browser.chosen === 'safari') ? 'Building…' : 'Working…';
+    const label = b.textContent; b.disabled = true; b.textContent = (S.browser.chosen === 'safari') ? 'Building…' : 'Saving…';
     const r = await api().prepare_extension();
     if (r && r.error) { toast(r.error); b.disabled = false; b.textContent = label; return; }
     S = await api().state(); onChange();
