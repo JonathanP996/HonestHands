@@ -397,7 +397,7 @@ class Cloud:
 
     def _refresh_inbox(self):
         uid = self.uid
-        unread = self._rest('GET', f'messages?to_user=eq.{uid}&read_at=is.null&select=id,body,created_at,sender:profiles!messages_from_user_fkey(display_name)&order=created_at.desc&limit=50')
+        unread = self._rest('GET', f'messages?to_user=eq.{uid}&read_at=is.null&select=id,body,kind,created_at,sender:profiles!messages_from_user_fkey(display_name)&order=created_at.desc&limit=50')
         pending = self._rest('GET', f'unlock_requests?watcher=eq.{uid}&status=eq.pending&select=id,created_at,who:profiles!unlock_requests_subject_fkey(display_name)&order=created_at.desc')
         self.watchers_n = len(self._rest('GET', f'partnerships?subject=eq.{uid}&status=eq.active&select=id'))
         self.inbox = {'unread': len(unread), 'requests': len(pending)}
@@ -410,7 +410,12 @@ class Cloud:
             watcher = None
         for m in unread:
             if m['id'] not in self._seen_ids and not first and watcher:
-                watcher.notify('HonestHands', f"{(m.get('sender') or {}).get('display_name') or 'A friend'}: {m['body'][:90]}")
+                who = (m.get('sender') or {}).get('display_name') or 'A friend'
+                b = m['body']
+                if m.get('kind') == 'system' and b[:1] in ('\U0001F44D', '\U0001F44E'):
+                    watcher.notify('HonestHands', f"{who} gave your prompt a thumbs {'up' if b[0] == chr(0x1F44D) else 'down'}: {b.split(chr(10), 1)[-1][:70]}")
+                else:
+                    watcher.notify('HonestHands', f"{who}: {b[:90]}")
             self._seen_ids.add(m['id'])
         for r in pending:
             if r['id'] not in self._seen_ids and not first and watcher:
@@ -505,14 +510,23 @@ class Cloud:
             self.app.release_session(f'{name} released you')
 
     # ------------------------------------------------- notes and thumbs on overridden prompts
-    def react(self, event_id, verdict):
-        """A thumbs up / down ('up' | 'down') on a friend's overridden prompt; '' takes it back."""
+    def react(self, event_id, verdict, owner_id='', prompt=''):
+        """A thumbs up / down ('up' | 'down') on a friend's overridden prompt; '' takes it back.
+        A new verdict also lands in their messages (green for fine, red for not okay) so they hear about it."""
         if verdict in ('up', 'down'):
             self._rest('POST', 'reactions?on_conflict=event_id,reviewer',
                        {'event_id': event_id, 'reviewer': self.uid, 'verdict': verdict, 'updated_at': iso(time.time())},
                        prefer='resolution=merge-duplicates,return=minimal')
         else:
             self._rest('DELETE', f'reactions?event_id=eq.{event_id}&reviewer=eq.{self.uid}', prefer='return=minimal')
+            return True
+        if owner_id and owner_id != self.uid:
+            head = '\U0001F44D Fine' if verdict == 'up' else '\U0001F44E Not okay'
+            try:
+                self._rest('POST', 'messages', {'from_user': self.uid, 'to_user': owner_id, 'kind': 'system',
+                                                'body': f'{head}\n\u201c{(prompt or "")[:300]}\u201d'}, prefer='return=minimal')
+            except CloudError:
+                pass                                      # the thumb itself is saved; the message is a courtesy
         return True
 
     def set_note(self, t, text, body):

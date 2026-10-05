@@ -1043,3 +1043,10 @@ body:has(#surface.onbing) #shell{padding:14px}
 :root[data-theme="dark"] .thumb.up.on,:root[data-theme="dark"] .rchip.up{background:#26391F;color:#B7DFA5}:root[data-theme="dark"] .thumb.down.on,:root[data-theme="dark"] .rchip.down{background:#472A30;color:#F08A92}
 .themeseg{width:fit-content}
 @media (prefers-reduced-motion:reduce){.thumb,.thumb svg{transition:none!important;animation:none!important}}
+
+/* thumbs that arrive as messages: green for fine, red for not okay */
+.bubble.vup,.bubble.vdown{white-space:pre-line;border:2px solid transparent}
+.bubble.vup{background:#DDEFD3;color:#1F4D16;border-color:#4E8A3A}.bubble.vdown{background:#F7DFE2;color:#8E2A38;border-color:#B3394A}
+.bubble.vup span::first-line,.bubble.vdown span::first-line{font-weight:800}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bubble.vup{background:#26391F;color:#B7DFA5}:root:not([data-theme="light"]) .bubble.vdown{background:#472A30;color:#F6B2B8}}
+:root[data-theme="dark"] .bubble.vup{background:#26391F;color:#B7DFA5}:root[data-theme="dark"] .bubble.vdown{background:#472A30;color:#F6B2B8}

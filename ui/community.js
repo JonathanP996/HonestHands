@@ -212,7 +212,7 @@ function drawFeed() {
     const before = e.reactions || [];
     e.reactions = before.filter(r => r.reviewer !== ov.me).concat(verdict ? [{ reviewer: ov.me, verdict }] : []);
     drawFeed();
-    const r = await api().cloud_react(e.id, verdict);
+    const r = await api().cloud_react(e.id, verdict, (e.who || {}).id || '', e.prompt_text || '');
     if (r && r.error) { e.reactions = before; drawFeed(); toast(/reactions|schema|exist/i.test(r.error) ? 'Thumbs need a one-time database update (cloud/migrations/003_notes_and_reactions.sql).' : r.error); }
   });
   box.querySelectorAll('[data-talk]').forEach(b => b.onclick = () => {
@@ -296,7 +296,8 @@ async function openChat(person, draft = '') {
     if (!d || d.error) { box.innerHTML = `<p class="muted small">${h((d && d.error) || 'Could not load.')}</p>`; return; }
     const s = d.messages.map(m => m.id).join(','); if (s === sig) return; sig = s;
     const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-    box.innerHTML = d.messages.length ? d.messages.map(m => `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
+    const vcls = (m) => m.kind === 'system' && m.body.startsWith('\u{1F44D}') ? ' vup' : m.kind === 'system' && m.body.startsWith('\u{1F44E}') ? ' vdown' : '';
+    box.innerHTML = d.messages.length ? d.messages.map(m => `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}${vcls(m)}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
       : '<p class="muted small" style="text-align:center;margin-top:30px">No messages yet. Say hello.</p>';
     if (stick || atEnd) box.scrollTop = box.scrollHeight;
   };
