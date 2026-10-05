@@ -73,6 +73,12 @@ PLIST="dist/$APP.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string 'Needed to check your AI messages against your class rules.'" "$PLIST" 2>/dev/null || true
 
+# Editing Info.plist above invalidates PyInstaller's signature, and Apple-silicon Macs then call a downloaded copy "damaged".
+# Sign the finished bundle again (ad-hoc; no developer account needed) so it is internally consistent.
+echo "==> Signing the app (ad-hoc)"
+codesign --force --deep --sign - "dist/$APP.app"
+codesign --verify --deep --strict "dist/$APP.app"
+
 echo "==> Making the DMG"
 rm -f "$APP.dmg"
 STAGE="dmg_stage"; rm -rf "$STAGE"; mkdir "$STAGE"
@@ -84,4 +90,4 @@ rm -rf "$STAGE"
 echo ""
 echo "==> Done:  $(pwd)/$APP.dmg"
 echo "Open it, drag the app to Applications, and launch it."
-echo "The first launch: right-click the app > Open (it isn't code-signed), then grant Accessibility when asked."
+echo "The first launch: right-click the app > Open (it isn't notarized by Apple), then grant Accessibility when asked."
