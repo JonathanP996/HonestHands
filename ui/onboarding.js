@@ -22,7 +22,7 @@ const CHECK = '<svg class="ocheck" viewBox="0 0 24 24" fill="none" stroke="curre
 function onbStructSig() {
   const e = S.engine, p = S.perms || {};
   return [ONB, S.classes.length, e.state, e.ready, p.accessibility, p.watching, S.ext_live, ONB_FLAGS.notifTried, ONB_FLAGS.notifOk,
-          !!(S.extension && S.extension.installed_dir), S.browser && S.browser.chosen, S.cloud_user && S.cloud_user.signed_in].join('|');
+          !!(S.extension && S.extension.installed_dir), S.browser && S.browser.chosen, S.cloud_user && S.cloud_user.signed_in, ONB_ACCT.mode].join('|');
 }
 
 function onbProgress(i) {
@@ -107,15 +107,41 @@ function stepBrowser() {
     next: nextBtn('Next', 'o-next', !chosen), skip: skipLnk('Skip for now', 'o-skipbrowser') });
 }
 
-function stepAccount() {
+// The account step has its own little flow inside onboarding: intro -> sign in / create -> name + handle -> done.
+const ONB_ACCT = { mode: '', email: '', msg: '', bad: true };
+function acctMode() {
   const on = S.cloud_user && S.cloud_user.signed_in;
+  if (on) return ONB_ACCT.mode === 'profile' || (!ONB_ACCT.mode && !S.cloud_user.name) ? 'profile' : 'done';
+  return ONB_ACCT.mode === 'in' || ONB_ACCT.mode === 'up' ? ONB_ACCT.mode : 'intro';
+}
+const authMsg = () => `<p class="oauthmsg ${ONB_ACCT.bad ? 'bad' : 'good'}" id="o-authmsg">${h(ONB_ACCT.msg)}</p>`;
+function stepAccount() {
+  const m = acctMode();
+  if (m === 'in' || m === 'up') {
+    const up = m === 'up';
+    return ostage({ art: 'account', small: true, title: up ? 'Create your account' : 'Welcome back',
+      sub: up ? 'An email and a password. That’s all it takes.' : 'Sign in to pick up where you left off.',
+      body: `<div class="oseg" id="o-tabs"><button data-t="in" class="${up ? '' : 'on'}">Sign in</button><button data-t="up" class="${up ? 'on' : ''}">Create account</button></div>
+        <label class="olab">Email</label><input class="oin" id="o-em" type="email" placeholder="you@school.edu" autocomplete="email" value="${h(ONB_ACCT.email)}">
+        <label class="olab">Password</label><div class="opw"><input class="oin" id="o-pw" type="password" placeholder="${up ? 'At least 8 characters' : 'Your password'}" autocomplete="${up ? 'new-password' : 'current-password'}"><button type="button" id="o-showpw">Show</button></div>
+        ${authMsg()}`,
+      next: nextBtn(up ? 'Create account' : 'Sign in', 'o-auth-go'), skip: skipLnk('Maybe later', 'o-next') });
+  }
+  if (m === 'profile') {
+    return ostage({ art: 'account', small: true, title: 'How friends find you',
+      sub: 'Your name is what they see. Your handle is what someone types to invite you.',
+      body: `<label class="olab">Your name</label><input class="oin" id="o-dn" maxlength="40" placeholder="Alex" value="${h((S.cloud_user && S.cloud_user.name) || '')}">
+        <label class="olab">Handle</label><div class="ohandle"><span>@</span><input class="oin" id="o-hd" maxlength="24" placeholder="alex_k" autocapitalize="off" spellcheck="false"></div>
+        <p class="onote">3–24 letters, numbers or underscores.</p>${authMsg()}`,
+      next: nextBtn('Continue', 'o-prof-go'), skip: skipLnk('Skip for now', 'o-next') });
+  }
   const body = `<div class="otrio3 two"><div><b>They can see</b><span>Prompts you sent despite a warning, session times, daily counts</span></div>
       <div><b>They never see</b><span>Syllabi, assignments, or clean and flagged messages</span></div></div>
-    ${on ? `<div class="oready">${CHECK}<div><b>You’re signed in</b><span>Invite someone from the Community tab.</span></div></div>` : ''}`;
+    ${m === 'done' ? `<div class="oready">${CHECK}<div><b>You’re signed in</b><span>Invite someone from the Community tab.</span></div></div>` : ''}`;
   return ostage({ art: 'account', title: 'Walk this out together',
     sub: 'Pair up with a friend, parent or mentor so they can see when you lock in. It’s optional, and you can do it any time.', body,
-    next: on ? nextBtn('Next') : nextBtn('Set up an account', 'o-acct-now'),
-    skip: on ? '' : skipLnk('Maybe later', 'o-next') });
+    next: m === 'done' ? nextBtn('Next') : nextBtn('Create an account', 'o-acct-now'),
+    skip: m === 'done' ? '' : `<span class="oskips">${skipLnk('I have an account', 'o-acct-signin')}<i>·</i>${skipLnk('Maybe later', 'o-next')}</span>` });
 }
 
 function stepClass() {
@@ -194,7 +220,7 @@ function wireOnboarding() {
   const go = (d) => { ONB_DIR = d; ONB = Math.max(0, ONB + d); const r = document.querySelector('.onb3'); 
     if (r && !OART_REDUCED()) { r.classList.add('bye'); setTimeout(() => paintOnboarding(), 170); } else paintOnboarding(); };
   on('o-next', () => go(1));
-  on('o-back', () => go(-1));
+  on('o-back', () => { if (ONB === 4 && (ONB_ACCT.mode === 'in' || ONB_ACCT.mode === 'up') && !(S.cloud_user && S.cloud_user.signed_in)) { ONB_ACCT.mode = ''; paintOnboarding(false); } else go(-1); });
   on('o-skipbrowser', () => go(1));
   on('o-done', finishOnboarding);
   on('o-add', () => openDocFlow('class'));
@@ -209,7 +235,46 @@ function wireOnboarding() {
   const bp = document.getElementById('o-brpanel');
   if (bp) wireBrowserPanel(bp, () => paintOnboarding(false));
 
-  on('o-acct-now', async () => { await api().finish_onboarding(); const r = await api().state(); S = r; TAB = 'community'; paint(); });
+  const goAcct = (mode) => { ONB_ACCT.mode = mode; ONB_ACCT.msg = ''; paintOnboarding(false); };
+  on('o-acct-now', () => goAcct('up'));
+  on('o-acct-signin', () => goAcct('in'));
+  const tabs = document.getElementById('o-tabs');
+  if (tabs) tabs.querySelectorAll('button').forEach(b => b.onclick = () => { ONB_ACCT.email = document.getElementById('o-em').value; goAcct(b.dataset.t); });
+  const spw = document.getElementById('o-showpw');
+  if (spw) spw.onclick = () => { const p = document.getElementById('o-pw'); const show = p.type === 'password'; p.type = show ? 'text' : 'password'; spw.textContent = show ? 'Hide' : 'Show'; };
+  const say = (t, bad = true) => { ONB_ACCT.msg = t; ONB_ACCT.bad = bad; const e = document.getElementById('o-authmsg'); if (e) { e.textContent = t; e.className = 'oauthmsg ' + (bad ? 'bad' : 'good'); } };
+  const afterAuth = async () => {
+    S = await api().state();
+    const st = await api().cloud_status();
+    ONB_ACCT.mode = st && st.handle ? 'done' : 'profile';
+    if (typeof refreshWelcome === 'function') refreshWelcome();
+    paintOnboarding(false);
+  };
+  const authGo = async () => {
+    const btn = document.getElementById('o-auth-go'); if (!btn || btn.disabled) return;
+    const up = acctMode() === 'up', em = document.getElementById('o-em').value.trim(), pw = document.getElementById('o-pw').value;
+    ONB_ACCT.email = em; btn.disabled = true; say(up ? 'Creating your account…' : 'Signing in…', false);
+    const r = up ? await api().cloud_sign_up(em, pw) : await api().cloud_sign_in(em, pw);
+    btn.disabled = false;
+    if (r && r.error) return say(r.error);
+    if (r && r.needs_confirm) { ONB_ACCT.mode = 'in'; paintOnboarding(false); return say('Account created. Click the link in the email we sent to confirm it, then sign in here. (The page it opens may say "can\'t be reached". That is fine.)', false); }
+    await afterAuth();
+  };
+  on('o-auth-go', authGo);
+  ['o-em', 'o-pw'].forEach(id => { const n = document.getElementById(id); if (n) n.onkeydown = (e) => { if (e.key === 'Enter') authGo(); }; });
+  const profGo = async () => {
+    const btn = document.getElementById('o-prof-go'); if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    const r = await api().cloud_set_profile(document.getElementById('o-hd').value, document.getElementById('o-dn').value);
+    btn.disabled = false;
+    if (r && r.error) return say(r.error);
+    S = await api().state(); ONB_ACCT.mode = 'done';
+    if (typeof refreshWelcome === 'function') refreshWelcome();
+    paintOnboarding(false);
+  };
+  on('o-prof-go', profGo);
+  const hd = document.getElementById('o-hd'); if (hd) hd.onkeydown = (e) => { if (e.key === 'Enter') profGo(); };
+  const em0 = document.getElementById('o-em'); if (em0 && !em0.value) em0.focus(); else if (document.getElementById('o-pw')) document.getElementById('o-pw').focus();
 }
 
 async function finishOnboarding() {
