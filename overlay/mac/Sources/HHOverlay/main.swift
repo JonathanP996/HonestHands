@@ -18,6 +18,8 @@ struct ShowCommand: Decodable {
     var allowSend: Bool?
     var allowLater: Bool?
     var choice: String?
+    var okLabel: String?
+    var note: String?
 }
 
 func emit(_ obj: [String: Any]) {
@@ -181,7 +183,7 @@ struct CardView: View {
 
                             VStack(spacing: 8) {
                                 HStack(spacing: 8) {
-                                    ActionButton(title: hard ? "OK, I’ll edit it" : "Edit my message", hint: "↩",
+                                    ActionButton(title: m.cmd.okLabel ?? (hard ? "OK, I’ll edit it" : "Edit my message"), hint: "↩",
                                                  style: .primary, tint: green) { m.onChoice("edit") }
                                     if m.cmd.allowSend ?? !hard {
                                         ActionButton(title: "Send it now", hint: "⌘↩", style: .danger, tint: accent) { m.onChoice("send_anyway") }
@@ -190,7 +192,7 @@ struct CardView: View {
                                 if m.cmd.allowSend ?? !hard {
                                     HStack(spacing: 5) {
                                         Image(systemName: "doc.text.magnifyingglass").font(.system(size: 10))
-                                        Text("Sending it now is recorded in your activity log.").font(.system(size: 11))
+                                        Text(m.cmd.note ?? "Sending it now is recorded in your activity log.").font(.system(size: 11))
                                     }
                                     .foregroundStyle(.tertiary)
                                 }

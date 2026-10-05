@@ -112,6 +112,7 @@ class Api:
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
+            'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),
             'engine': self._app.engine.status(),
             'perms': {'accessibility': watcher.has_accessibility(), 'watching': self._app.guard.watching},
             'ext_live': self._app.extension_seen_recently(),
@@ -199,6 +200,11 @@ class Api:
             self.prepare_extension()
         subprocess.Popen(['open', str(d)])
         return True
+
+    def set_lock(self, browsers_on, ai_apps_on):
+        self._store.data['lock'] = dict(self._store.data.get('lock') or {}, browsers=bool(browsers_on), ai_apps=bool(ai_apps_on))
+        self._store.save()
+        return self.state()
 
     def launch_extension_app(self):
         import subprocess

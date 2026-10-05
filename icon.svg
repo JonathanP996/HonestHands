@@ -17,4 +17,6 @@
     <path d="M544 450 V270 a46 46 0 0 1 92 0 V470"/>
     <path d="M636 470 V360 a46 46 0 0 1 90 0 c0 150 6 210 -28 300 c-40 104 -120 165 -236 165 c-96 0 -156 -28 -214 -96 l-118 -150 a48 48 0 0 1 74 -60 l98 110"/>
   </g>
+  <circle cx="515" cy="612" r="38" fill="#8B5B7E"/>
+  <circle cx="515" cy="612" r="38" fill="none" stroke="#EBD3EC" stroke-opacity="0.55" stroke-width="6"/>
 </svg>

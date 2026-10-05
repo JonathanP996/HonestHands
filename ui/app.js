@@ -381,6 +381,14 @@ function paintSettings() {
       <p class="sub">Pick the one browser where AI websites are allowed during a study session, and set up its extension. The extension does nothing unless HonestHands is running and a session is active. The Claude and ChatGPT desktop apps are covered by the Mac app directly.</p>
       <div id="extBody"></div>
     </div>
+    <div class="card"><h2>Stay locked in</h2>
+      <p class="sub">While a study session is on, HonestHands notices when another app comes to the front. If it's on this list it's hidden and you're put back where you were, with a short note.</p>
+      <label class="lockrow"><span class="switch"><input type="checkbox" id="lk-b" ${S.lock.browsers ? 'checked' : ''}><i></i></span>
+        <div><b>Turn me back from other browsers</b><span>Only your guarded browser stays available${S.browser && S.browser.chosen ? '' : ' (pick one above first)'}.</span></div></label>
+      <label class="lockrow"><span class="switch"><input type="checkbox" id="lk-a" ${S.lock.ai_apps ? 'checked' : ''}><i></i></span>
+        <div><b>Also block AI desktop apps</b><span>Claude, ChatGPT and similar. Off by default, because the guard already checks messages you send from them.</span></div></label>
+      <p class="small muted mt">This is a speed bump for the moment of temptation, not a cage: you can still quit HonestHands. Set an accountability PIN below so ending a session or quitting needs someone else.</p>
+    </div>
     <div class="card"><h2>Accountability PIN</h2>
       <p class="sub">A friend or parent sets this. Then ending a session, deleting a class, or clearing the log needs it.</p>
       <div class="row">${S.has_pin?'<div class="field"><label>Current PIN</label><input type="password" id="op" inputmode="numeric"></div>':''}
@@ -397,6 +405,8 @@ function paintSettings() {
   extBox.innerHTML = browserPanelHTML();
   wireBrowserPanel(extBox, () => paint());
 
+  const saveLock = async () => { const r = await api().set_lock($('#lk-b').checked, $('#lk-a').checked); if (r && !r.error) { S = r; toast('Saved.'); } };
+  $('#lk-b').onchange = saveLock; $('#lk-a').onchange = saveLock;
   if ($('#apply')) $('#apply').onclick = async () => { $('#apply').disabled = true;
     const r = await api().setup_ai();
     if (r.error) toast(r.error); else { S = r; toast('Getting the AI ready…'); paint(); } };

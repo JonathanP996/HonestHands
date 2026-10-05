@@ -49,6 +49,7 @@ def ensure_single_instance():
 from engine import Engine
 from ai_guard import AIGuard
 import cloud
+import lock
 from store import Store
 
 
@@ -92,6 +93,7 @@ class App:
         self.guard = watcher.Guard(self.store, self.ai_guard)
         self.api = None
         self.cloud = cloud.Cloud(self.store, self)
+        self.lock = lock.SessionLock(self.store, self._lock_message, watcher.is_ai_app)
         watcher.Guard.on_override = self.cloud.kick
         self.api = Api(self)
         self.cloud.app = self
@@ -145,6 +147,11 @@ class App:
         thumb.transformUsingAffineTransform_(t)
         path.appendBezierPath_(thumb)
         path.fill()
+        from AppKit import NSGraphicsContext
+        ctx = NSGraphicsContext.currentContext()
+        ctx.setCompositingOperation_(0)   # NSCompositingOperationClear: a nail-hole through the palm
+        NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(7.9, 4.6, 2.4, 2.4)).fill()
+        ctx.setCompositingOperation_(2)                         # back to normal drawing
         img.unlockFocus()
         img.setTemplate_(True)
         if not active:
@@ -227,6 +234,7 @@ class App:
         AppHelper.callAfter(self.setup_main_thread)
         self.engine.autostart()
         self.cloud.start()
+        AppHelper.callAfter(self.lock.start)           # app-switch notifications must be registered on the main thread
         def _warm_when_ready():
             import time as _t
             for _ in range(240):
@@ -393,6 +401,19 @@ class App:
         self._pending_block = None
         pb['guard'].on_panel_choice('send_anyway' if choice == 'send_anyway' else 'edit', pb['p'])
         return True
+
+    def _lock_message(self, reason, app_name):
+        """Tell the student why they were turned back, and note it in the activity log."""
+        cls, asg = self.store.session_targets()
+        self.store.log({'t': time.time(), 'event': 'turned back from ' + app_name, 'class': cls['name'] if cls else '', 'assignment': ''})
+        payload = {'hard': True, 'title': 'You’re locked in', 'context': (cls['name'] if cls else 'Study session') + ' · ' + app_name,
+                   'reason': reason, 'rule': '', 'quote': '', 'tip': '', 'source': 'session lock', 'allowSend': False,
+                   'okLabel': 'Back to work', 'note': 'End your session from HonestHands if you’re done.'}
+        native = getattr(self, 'native_overlay', None)
+        if native is not None:
+            AppHelper.callAfter(lambda: native.show(payload, lambda choice: None))
+        else:
+            watcher.notify('HonestHands', reason)
 
     # ----- browser-extension bridge -----
     def note_extension_ping(self, browser=''):

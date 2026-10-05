@@ -17,6 +17,7 @@ DEFAULTS = {
     'engine': {'backend': 'builtin', 'model': 'small'},
     'onboarded': False,
     'cloud': {},
+    'lock': {'browsers': True, 'ai_apps': False},   # what to turn you back from while a session is on
     'browser': '',          # chrome | edge | firefox | safari | '' (not chosen yet)
 }
 

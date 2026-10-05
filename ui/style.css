@@ -812,3 +812,7 @@ body.morphing .sb-in{animation:none;opacity:0}
 /* two more class colors, taken from the palette */
 .cc-orchid{--cc:#EBD6EC;--cd:#B07CB2;--cl:#EBD3EC}.cc-olive{--cc:#E6EAB8;--cd:#98A21B;--cl:#E3E8AC}
 @media (prefers-color-scheme:dark){:root{--c-orchid:#3A2C3E;--c-olive:#2F3A1A}}
+
+.lockrow{display:flex;gap:16px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line);cursor:pointer;margin:0}
+.lockrow:first-of-type{border-top:none}.lockrow b{display:block;font-size:15px;color:var(--ink)}.lockrow span:not(.switch){display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.lockrow .switch{margin-top:3px}

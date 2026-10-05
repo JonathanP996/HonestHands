@@ -68,6 +68,14 @@ Some AI websites hide their send button from macOS, and only the page itself can
 
 Set it up in the first-run flow or in **Settings › Guarded browser**. After updating the app, refresh the extension in your browser and reload your AI tabs.
 
+## Staying locked in
+
+Proctoring tools do this in two ways: Respondus LockDown Browser replaces your browser with a kiosk that takes over the screen, and Honorlock is an extension plus webcam and screen recording that flags tab switches for a human to review. Neither is unbreakable on a computer you control, and both are heavier than HonestHands needs.
+
+Instead, while a study session is on, HonestHands notices when another app comes to the front. If it's on your block list, the app is hidden and you're put back where you were, with a short note. By default that covers **other browsers** (only your guarded browser stays available); you can also block **AI desktop apps** (Claude, ChatGPT and similar). Each time it turns you back it's noted in your Activity. Set it in **Settings › Stay locked in**.
+
+It's a speed bump for the moment of temptation, not a cage: you can still quit HonestHands. An accountability PIN makes ending a session or quitting need someone else.
+
 ## Community setup (Supabase)
 
 Accounts, partners and the feed use a Supabase project. The database layout and the access rules are in `cloud/schema.sql`; the one-time setup steps are in `cloud/README.md`. In short: run `schema.sql`, turn off "Confirm email", and put the project URL and the public anon key in `cloud.py` (or the `HH_SUPABASE_URL` / `HH_SUPABASE_ANON` environment variables). Never put the `service_role` key anywhere in this repo.
@@ -79,6 +87,7 @@ python3 tests/run_guard_tests.py   # the real guard on ~46 exact messages; appen
 python3 tests/test_homework.py     # finding which homework question a message resembles
 python3 tests/test_images.py       # pictures read on-device and judged
 python3 tests/test_browser_block.py # AI sites are blocked in every browser except the guarded one
+python3 tests/test_lock.py         # the app lock (add --live to check the real macOS notification)
 python3 tests/test_cloud_mock.py   # accounts, partners, sync, against an in-memory stand-in for Supabase
 ```
 
@@ -109,6 +118,7 @@ When the guard gets something wrong, paste the exact message into `tests/guard_c
 | `ai_guard.py` | The guard: checklist, homework matching, pictures |
 | `engine.py` | The on-device AI model |
 | `browsers.py`, `extensions.py` | The supported browsers; building the extension for each |
+| `lock.py` | Turns you back from blocked apps during a session |
 | `homework.py` | Finds which homework question a message resembles |
 | `ocr.py` | Reads text in pictures (Apple Vision) |
 | `distill.py`, `docs.py`, `rules.py` | Pulling the AI rules out of a syllabus; keyword fallback |
