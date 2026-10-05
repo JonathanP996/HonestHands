@@ -367,6 +367,9 @@ class Cloud:
                 continue
             now = time.time()
             try:
+                if woken or now - last_inbox >= 12:          # first: it is quick and tells the app who your friends are
+                    last_inbox = now
+                    self._refresh_inbox()
                 if woken or now - last_sync >= 45:
                     last_sync = now
                     self.sync_now()
@@ -375,9 +378,6 @@ class Cloud:
                         last_beat = now
                     self._notify_new_overrides()
                     self.status = {'state': 'ok', 'message': '', 'last_sync': time.time()}
-                if woken or now - last_inbox >= 12:
-                    last_inbox = now
-                    self._refresh_inbox()
                 if self._locked():
                     self._check_release()                # a friend may have released us: look every few seconds
             except CloudError as e:
@@ -393,7 +393,19 @@ class Cloud:
 
     # ------------------------------------------------- inbox: messages + release requests
     inbox = {'unread': 0, 'requests': 0}
-    watchers_n = None
+    _watchers_n = None
+
+    @property
+    def watchers_n(self):
+        """How many friends can release you. Remembered between launches, so the start page is right the moment the app opens."""
+        return self._watchers_n if self._watchers_n is not None else (self.c.get('watchers_n') if self.signed_in else None)
+
+    @watchers_n.setter
+    def watchers_n(self, n):
+        self._watchers_n = n
+        if self.c.get('watchers_n') != n:
+            self.c['watchers_n'] = n
+            self._save()
 
     def _refresh_inbox(self):
         uid = self.uid

@@ -279,6 +279,7 @@ function paintHome() {
     if ($('#lk-friend')) $('#lk-friend').onclick = () => { TAB = 'community'; paint(); };
   };
   paintPicks(); paintDur();
+  REFRESH_DUR = () => { if (document.getElementById('dur')) paintDur(); };
   $('#go').onclick = async () => {
     const pick = m.querySelector('.pick.on'), mins = minutes();
     if (pick && !reduceMotion()) return morphStart(pick, api().start_session(selC, selA, 'warn', mins));
@@ -549,10 +550,12 @@ function paintSettings() {
 }
 
 // ---- boot + live polling for engine/session changes ----
+let REFRESH_DUR = null;     // set by the start page: redraws the duration buttons when the friend count arrives
 window.addEventListener('pywebviewready', async () => {
   await refresh();
   setInterval(async () => {
     try { const sessSig = x => x ? [x.class_id,x.assignment_id,x.started].join(',') : '';
+      const prevExit = JSON.stringify(S.exit);
       const prev = JSON.stringify(S.engine) + S.perms.watching + S.perms.accessibility + S.ext_live + sessSig(S.session);
       const ns = await api().state();
       if (!ns.onboarded) {
@@ -562,7 +565,10 @@ window.addEventListener('pywebviewready', async () => {
         return;
       }
       if (JSON.stringify(ns.engine) + ns.perms.watching + ns.perms.accessibility + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
-      else { S = ns; paintBadge(); paintUpdateBar(); if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
+      else { S = ns; paintBadge(); paintUpdateBar();
+        // friends/PIN known now: un-gray the timed options on the start page
+        if (JSON.stringify(ns.exit) !== prevExit && TAB === 'home' && REFRESH_DUR) REFRESH_DUR();
+        if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
         const box=$('#eprog'); if(box) box.innerHTML=`<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}%</div>`; } }
     } catch (_) {}
   }, 1500);

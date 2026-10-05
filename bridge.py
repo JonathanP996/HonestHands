@@ -117,7 +117,7 @@ class Api:
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
             'theme': s.data.get('theme', 'system'),
-            'version': version.VERSION, 'update': self._app.updater.available(), 'auto_updates': sparkle.active(),
+            'version': version.VERSION, 'update': (getattr(self._app, 'updater', None).available() if getattr(self._app, 'updater', None) else None), 'auto_updates': sparkle.active(),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),
             'engine': self._app.engine.status(),
