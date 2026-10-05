@@ -7,6 +7,20 @@ APP="HonestHands"
 echo "==> Checking for Python 3"
 command -v python3 >/dev/null || { echo "Install Python 3 first (python.org or: xcode-select --install)"; exit 1; }
 
+echo "==> Numbering this build"
+python3 - <<'PY'
+import re, json, os
+s = open("version.py").read()
+n = int(re.search(r"BUILD = (\d+)", s).group(1)) + 1
+open("version.py", "w").write(re.sub(r"BUILD = \d+", f"BUILD = {n}", s))
+ver = re.search(r"VERSION = '([^']*)'", s).group(1)
+site = os.path.join("..", "honesthands-site")
+if os.path.isdir(site):      # the website tells installed copies what the newest build is
+    json.dump({"build": n, "version": ver, "notes": os.environ.get("UPDATE_NOTES", ""), "url": "https://honesthands-site.vercel.app/HonestHands.dmg"},
+              open(os.path.join(site, "version.json"), "w"), indent=2)
+print("   build", n)
+PY
+
 echo "==> Setting up a build environment"
 python3 -m venv .buildenv
 source .buildenv/bin/activate
@@ -64,7 +78,7 @@ pyinstaller --noconfirm --windowed --name "$APP" $ICONFLAG \
   --add-data "overlay/bin:overlay/bin" \
   --osx-bundle-identifier "com.honesthands.app" \
   --collect-all llama_cpp \
-  --hidden-import net --hidden-import rules --hidden-import store --hidden-import engine --hidden-import ai_guard \
+  --hidden-import net --hidden-import updates --hidden-import version --hidden-import rules --hidden-import store --hidden-import engine --hidden-import ai_guard \
   --hidden-import distill --hidden-import docs --hidden-import watcher --hidden-import bridge --hidden-import overlay_client \
   main.py
 

@@ -44,6 +44,10 @@ The popup is a small native Swift program. Build it once with `cd overlay/mac &&
 
 This produces **HonestHands.app** and **HonestHands.dmg**. First launch: right-click the app, choose Open (it isn't code-signed yet), then grant Accessibility.
 
+## Shipping an update
+
+`UPDATE_NOTES="What changed" ./build.sh` numbers the build (version.py), makes the installer, and writes `version.json` into the sibling `honesthands-site` folder. Copy `HonestHands.dmg` there too, push, and run `vercel deploy --prod --yes`. Installed copies check that `version.json` every few hours; when it names a newer build they show a banner ("Download update") and a notification. Copies run from source never check.
+
 ## Using it
 
 - **Study session** — pick a class (or Tutor mode) and an assignment, then start. The session screen shows the timer and this session's clean / flagged / overridden counts.

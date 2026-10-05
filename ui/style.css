@@ -1050,3 +1050,9 @@ body:has(#surface.onbing) #shell{padding:14px}
 .bubble.vup span::first-line,.bubble.vdown span::first-line{font-weight:800}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bubble.vup{background:#26391F;color:#B7DFA5}:root:not([data-theme="light"]) .bubble.vdown{background:#472A30;color:#F6B2B8}}
 :root[data-theme="dark"] .bubble.vup{background:#26391F;color:#B7DFA5}:root[data-theme="dark"] .bubble.vdown{background:#472A30;color:#F6B2B8}
+
+/* update banner */
+#updatebar{display:flex;align-items:center;gap:12px;margin:0 30px;padding:11px 16px;border-radius:16px;background:var(--lav);color:var(--ink);position:relative;z-index:2;animation:orise .5s both}
+#updatebar[hidden]{display:none}
+#updatebar div{flex:1;font-size:14px;line-height:1.4}#updatebar span{color:var(--ink-2)}#updatebar small{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+.ub-dot{width:10px;height:10px;border-radius:50%;background:var(--green);animation:ping 2s infinite;flex:none}

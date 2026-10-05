@@ -55,6 +55,7 @@ from ai_guard import AIGuard
 import cloud
 import keepalive
 import lock
+import updates
 from store import Store
 
 
@@ -98,6 +99,7 @@ class App:
         self.guard = watcher.Guard(self.store, self.ai_guard)
         self.api = None
         self.cloud = cloud.Cloud(self.store, self)
+        self.updater = updates.Updater(self.store, self._update_found)
         self.lock = lock.SessionLock(self.store, self._lock_message, watcher.is_ai_app)
         watcher.Guard.on_override = self.cloud.kick
         self.api = Api(self)
@@ -108,6 +110,9 @@ class App:
         self.quitting = False
         self._ext_last_ping = 0.0
         self._ext_pings = {}        # browser key -> time of the extension's last check-in
+
+    def _update_found(self, latest):
+        watcher.notify('HonestHands', f"A new version is ready{(' (' + latest['version'] + ')') if latest.get('version') else ''}. Open HonestHands to update.")
 
     # ---------- timed lock-in ----------
     def locked_now(self):
@@ -274,6 +279,7 @@ class App:
         AppHelper.callAfter(self.setup_main_thread)
         self.engine.autostart()
         self.cloud.start()
+        self.updater.start()
         threading.Thread(target=self._lock_tick, daemon=True).start()
         (keepalive.install if self.locked_now() else keepalive.remove)()     # a stale watcher must never outlive its lock-in
         AppHelper.callAfter(self.lock.start)           # app-switch notifications must be registered on the main thread

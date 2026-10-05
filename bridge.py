@@ -7,6 +7,7 @@ import browsers as browserlib
 import cloud as cloudlib
 import extensions
 import keepalive
+import version
 import distill
 import docs
 import rules
@@ -115,6 +116,7 @@ class Api:
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
             'theme': s.data.get('theme', 'system'),
+            'version': version.VERSION, 'update': self._app.updater.available(),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),
             'engine': self._app.engine.status(),
@@ -662,6 +664,21 @@ class Api:
 
     def cloud_feedback(self, pairs):
         return self._cloud(self._app.cloud.feedback, pairs)
+
+    def check_update(self):
+        """Settings > Check for updates: look right now."""
+        self._app.updater.check_now()
+        return self.state()
+
+    def dismiss_update(self):
+        self._app.updater.dismiss()
+        return self.state()
+
+    def open_update(self):
+        import webbrowser
+        u = self._app.updater.latest
+        webbrowser.open((u or {}).get('url') or version.SITE + '/HonestHands.dmg')
+        return True
 
     def set_theme(self, mode):
         self._store.data['theme'] = mode if mode in ('light', 'dark') else 'system'

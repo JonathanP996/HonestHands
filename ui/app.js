@@ -105,9 +105,20 @@ function extChipHTML() {
   if (S.ext_live) return `<span class="chip good"><span class="d"></span>Extension on</span>`;
   return `<span class="chip warn"><span class="d"></span>Extension off</span>`;
 }
+function paintUpdateBar() {
+  const bar = document.getElementById('updatebar'); if (!bar) return;
+  const u = S && S.update, show = !!u && S.onboarded;
+  bar.hidden = !show; if (!show) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `<span class="ub-dot"></span><div><b>A new version of HonestHands is ready${u.version ? ' (' + h(u.version) + ')' : ''}.</b>${u.notes ? ' <span>' + h(u.notes) + '</span>' : ''}
+    <small>Download it, open it, and drag it over the old one in Applications.</small></div>
+    <button class="btn sm" id="ub-go">Download update</button><button class="btn ghost sm" id="ub-later">Later</button>`;
+  document.getElementById('ub-go').onclick = () => api().open_update();
+  document.getElementById('ub-later').onclick = async () => { const r = await api().dismiss_update(); if (r && !r.error) { S = r; paintUpdateBar(); } };
+}
 function paint() {
   stopTimerTick();
   if (S) applyTheme(S.theme);
+  paintUpdateBar();
   const rail = document.getElementById('rail');
   if (S && !S.onboarded) { rail.style.display = 'none'; document.getElementById('topbar').style.display='none'; paintOnboarding(); return; }
   rail.style.display = ''; document.getElementById('topbar').style.display='';
@@ -456,6 +467,8 @@ function applyTheme(mode) {
 function paintSettings() {
   const m = $('#main'); const e = S.engine;
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
+    <div class="card"><h2>About</h2><p class="sub">HonestHands ${h(S.version || '')}. ${S.update ? 'A newer version is ready.' : 'You have the latest version.'}</p>
+      <div class="btnrow"><button class="btn ghost" id="chkup">Check for updates</button>${S.update ? '<button class="btn" id="getup">Download update</button>' : ''}</div></div>
     <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my Mac” follows your system setting.</p>
       <div class="segmode themeseg" id="themeseg">${[['system', 'Match my Mac'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     </div>
@@ -505,6 +518,8 @@ function paintSettings() {
     const r = await api().set_theme(b.dataset.th); if (r && !r.error) { S = r; applyTheme(S.theme); }
     $('#themeseg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   });
+  $('#chkup').onclick = async () => { $('#chkup').disabled = true; const r = await api().check_update(); $('#chkup').disabled = false; if (r && !r.error) { S = r; toast(S.update ? 'A new version is ready.' : 'You have the latest version.'); paintSettings(); paintUpdateBar(); } };
+  if ($('#getup')) $('#getup').onclick = () => api().open_update();
   $('#acc').onclick = () => api().open_accessibility_settings();
   $('#data').onclick = () => api().open_data_folder();
 }
