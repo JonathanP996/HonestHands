@@ -46,7 +46,7 @@ This produces **HonestHands.app** and **HonestHands.dmg**. First launch: right-c
 
 ## Shipping an update
 
-`UPDATE_NOTES="What changed" ./build.sh` numbers the build (version.py), makes the installer, and writes `version.json` into the sibling `honesthands-site` folder. Copy `HonestHands.dmg` there too, push, and run `vercel deploy --prod --yes`. Installed copies check that `version.json` every few hours; when it names a newer build they show a banner ("Download update") and a notification. Copies run from source never check.
+`UPDATE_NOTES="What changed" ./build.sh` numbers the build (version.py), makes the installer, and stages `appcast.xml` and `version.json` in `release/`. Nothing reaches people until you publish on purpose: copy those two files and `HonestHands.dmg` into the sibling `honesthands-site` folder (or build with `PUBLISH=1`), push, and run `vercel deploy --prod --yes`. Installed copies check that `version.json` every few hours; when it names a newer build they show a banner ("Download update") and a notification. Copies run from source never check.
 
 ## Using it
 

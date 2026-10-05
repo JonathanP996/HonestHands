@@ -14,7 +14,8 @@ s = open("version.py").read()
 n = int(re.search(r"BUILD = (\d+)", s).group(1)) + 1
 open("version.py", "w").write(re.sub(r"BUILD = \d+", f"BUILD = {n}", s))
 ver = re.search(r"VERSION = '([^']*)'", s).group(1)
-site = os.path.join("..", "honesthands-site")
+site = os.path.join("..", "honesthands-site") if os.environ.get("PUBLISH") == "1" else "release"   # staged here; only written to the website when PUBLISH=1
+os.makedirs(site, exist_ok=True)
 if os.path.isdir(site):      # the website tells installed copies what the newest build is
     json.dump({"build": n, "version": ver, "notes": os.environ.get("UPDATE_NOTES", ""), "url": "https://honesthands-site.vercel.app/HonestHands.dmg"},
               open(os.path.join(site, "version.json"), "w"), indent=2)
@@ -218,7 +219,8 @@ python3 - <<'PY'
 import re, os, subprocess, email.utils, time
 s = open("version.py").read()
 build = re.search(r"BUILD = (\d+)", s).group(1); ver = re.search(r"VERSION = '([^']*)'", s).group(1)
-site = os.path.join("..", "honesthands-site")
+site = os.path.join("..", "honesthands-site") if os.environ.get("PUBLISH") == "1" else "release"
+os.makedirs(site, exist_ok=True)
 if os.path.isdir(site) and os.path.exists("vendor/sparkle-bin/sign_update"):
     out = subprocess.run(["vendor/sparkle-bin/sign_update", "HonestHands.dmg"], capture_output=True, text=True).stdout.strip()
     notes = os.environ.get("UPDATE_NOTES", "") or "Improvements and fixes."
