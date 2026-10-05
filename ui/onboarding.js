@@ -26,54 +26,55 @@ function onbStructSig() {
 }
 
 function onbProgress(i) {
-  return `<div class="oprog">${ONB_STEPS.map((n, k) => `<div class="ostep ${k < i ? 'past' : ''} ${k === i ? 'now' : ''}"><i></i><span>${n}</span></div>`).join('')}</div>`;
+  return ONB_STEPS.map((n, k) => `<div class="ostep ${k < i ? 'past' : ''} ${k === i ? 'now' : ''}" title="${n}"><i></i></div>`).join('');
 }
-const onbNav = (back, nextLabel, nextId = 'o-next', extra = '') =>
-  `<div class="onav">${back ? '<button class="btn ghost big" id="o-back">Back</button>' : '<span></span>'}<div class="onav-r">${extra}<button class="btn big" id="${nextId}">${nextLabel}</button></div></div>`;
+const words = (t) => t.split(' ').map((w, k) => `<span class="ow" style="--w:${k}"><span>${w}</span></span>`).join(' ');
+const OBG = ['lilac', 'mint', 'sky', 'sand', 'rose', 'olive'];
+const OART_KEY = ['welcome', 'access', 'ai', 'browser', 'account', 'klass'];
+const arrow = '<svg class="oarr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+// one screen: a pastel page, an illustration, a bold title, a short line, the step's own controls, then the big button and a skip link
+function ostage({ title, sub, body = '', next = '', skip = '', art, small = false }) {
+  return `<div class="ostg">
+    <div class="oartbox ${small ? 'sm' : ''}">${oartHTML(art)}</div>
+    <h1 class="otitle3">${words(title)}</h1>
+    <p class="osub orise" style="--i:3">${sub}</p>
+    ${body ? `<div class="obody orise" style="--i:4">${body}</div>` : ''}
+    <div class="octa orise" style="--i:5">${next}${skip}</div>
+  </div>`;
+}
+const nextBtn = (label, id = 'o-next', dis = false) => `<button class="obtn" id="${id}" ${dis ? 'disabled' : ''}><span>${label}</span>${arrow}</button>`;
+const skipLnk = (label, id) => `<a href="#" class="oskip3" id="${id}">${label}</a>`;
 
 // ---------------------------------------------------------------- the steps
 function stepWelcome() {
-  return `<section class="ocard hero rise">
-    <div class="oicon big">${oicon('hand')}</div>
-    <h1 class="otitle xl">Welcome to HonestHands</h1>
-    <p class="overse">“Let the thief no longer steal, but rather let him labor, doing honest work with his own hands, so that he may have something to share with anyone in need.”<br><span class="ref">Ephesians 4:28</span></p>
-    <p class="olead">HonestHands checks what you’re about to send to an AI against your class’s own rules and warns you first, so AI stays a tutor and not a shortcut.</p>
-    <div class="otrio">
-      <div><b>Private</b><span>The AI runs on your Mac. What you type never leaves it.</span></div>
-      <div><b>Honest</b><span>You can always send anyway. It’s just recorded.</span></div>
-      <div><b>Together</b><span>Optionally pair up with a friend who keeps you accountable.</span></div>
-    </div>
-    <p class="osmall">Setup takes about three minutes.</p>
-    <div class="onav center"><button class="btn big xl" id="o-next">Let’s set it up</button></div>
-  </section>`;
+  return ostage({ art: 'welcome', title: 'Welcome to HonestHands',
+    sub: 'It checks what you’re about to send to an AI against your class’s own rules and warns you first, so AI stays a tutor and not a shortcut.',
+    body: `<div class="otrio3"><div><b>Private</b><span>The AI runs on your Mac</span></div><div><b>Honest</b><span>Send anyway; it’s just recorded</span></div><div><b>Together</b><span>A friend can cheer you on</span></div></div>
+      <p class="overse3">“…doing honest work with his own hands.” <span>Ephesians 4:28</span></p>`,
+    next: nextBtn('Let’s set it up') });
 }
 
 function stepAccess() {
   const p = S.perms || {};
-  const acc = !!p.accessibility;
-  const notif = ONB_FLAGS.notifOk;
-  return `<section class="ocard rise">
-    <div class="oicon">${oicon('shield')}</div>
-    <h1 class="otitle">Let HonestHands watch for sends</h1>
-    <p class="olead">macOS asks you to approve a couple of things first. This is what lets the guard read a message and hold it for a check before it goes out.</p>
-
-    <div class="oitem ${acc ? 'done' : ''}">
-      <span class="oitem-i">${acc ? CHECK : oicon('lock')}</span>
-      <div class="oitem-t"><b>Accessibility <em>required</em></b><span>Lets the guard see what you’re typing in an AI app or site, and hold the send for a moment.</span></div>
-      ${acc ? `<span class="ostatus ok">${p.watching ? 'Granted · guard is on' : 'Granted'}</span>` : '<button class="btn" id="o-acc">Grant access</button>'}
+  const acc = !!p.accessibility, notif = ONB_FLAGS.notifOk;
+  const body = `
+    <div class="orow ${acc ? 'done' : ''}">
+      <span class="orow-i">${acc ? CHECK : oicon('lock')}</span>
+      <div class="orow-t"><b>Accessibility <em>required</em></b><span>Lets the guard see what you type and hold the send.</span></div>
+      ${acc ? `<span class="ostatus ok">${p.watching ? 'Guard on' : 'Granted'}</span>` : '<button class="osm" id="o-acc">Grant</button>'}
     </div>
-    ${acc ? '' : `<ol class="osteps"><li>Click <b>Grant access</b>. System Settings opens.</li><li>Switch on <b>HonestHands</b> in the list (if you’re running it from Terminal, switch on <b>Terminal</b> instead).</li><li>Come back here. This page notices by itself.</li></ol>`}
-
-    <div class="oitem ${notif ? 'done' : ''}">
-      <span class="oitem-i">${notif ? CHECK : oicon('bell')}</span>
-      <div class="oitem-t"><b>Notifications <em class="opt">optional</em></b><span>Quiet alerts, like when a friend you watch sends something despite a warning.</span></div>
+    ${acc ? '' : `<ol class="ohow"><li>Click <b>Grant</b>. System Settings opens.</li><li>Switch on <b>HonestHands</b> (or <b>Terminal</b> if you run it from there).</li><li>Come back. This page notices by itself.</li></ol>`}
+    <div class="orow ${notif ? 'done' : ''}">
+      <span class="orow-i">${notif ? CHECK : oicon('bell')}</span>
+      <div class="orow-t"><b>Notifications <em class="opt">optional</em></b><span>Quiet alerts, like when a friend’s prompt is flagged.</span></div>
       ${notif ? '<span class="ostatus ok">Working</span>'
-              : ONB_FLAGS.notifTried ? '<div class="obtns"><button class="btn sm" id="o-notif-yes">Yes, I saw it</button><button class="btn ghost sm" id="o-notif-no">No</button></div>'
-                                     : '<button class="btn ghost" id="o-notif">Send a test</button>'}
+              : ONB_FLAGS.notifTried ? '<div class="obtns"><button class="osm" id="o-notif-yes">I saw it</button><button class="osm ghost" id="o-notif-no">No</button></div>'
+                                     : '<button class="osm ghost" id="o-notif">Test</button>'}
     </div>
-    ${ONB_FLAGS.notifTried && !notif ? '<p class="osmall left">Didn’t see anything? Turn on notifications for <b>Script Editor</b> (macOS shows alerts under that name). <a href="#" id="o-notif-open">Open notification settings</a></p>' : ''}
-    ${onbNav(true, acc ? 'Continue' : 'Continue anyway', 'o-next')}
-  </section>`;
+    ${ONB_FLAGS.notifTried && !notif ? '<p class="onote">Didn’t see it? Turn on notifications for <b>Script Editor</b>. <a href="#" id="o-notif-open">Open settings</a></p>' : ''}`;
+  return ostage({ art: 'access', title: 'Let it watch for sends',
+    sub: 'macOS needs your OK first. This is what lets the guard read a message and pause it for a check.', body,
+    next: nextBtn(acc ? 'Next' : 'Continue anyway') });
 }
 
 function aiStatusHTML() {
@@ -82,73 +83,68 @@ function aiStatusHTML() {
   if (e.state === 'downloading' || e.state === 'starting') {
     const pr = e.progress, pct = pr && pr.total ? Math.round(100 * pr.done / pr.total) : 0;
     const gb = pr && pr.total ? `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB` : (e.message || 'Starting…');
-    return `<div class="obig"><div class="opct">${e.state === 'starting' ? '<span class="spin big"></span>' : pct + '<small>%</small>'}</div>
-      <div class="obar"><i style="width:${e.state === 'starting' ? 100 : pct}%"></i></div>
-      <div class="osmall">${e.state === 'starting' ? 'Loading the AI…' : gb}</div></div>`;
+    return `<div class="obig"><div class="opct">${e.state === 'starting' ? '<span class="spin big"></span>' : `<b id="o-pct">${pct}</b><small>%</small>`}</div>
+      <div class="obar"><i id="o-fill" style="width:${e.state === 'starting' ? 100 : pct}%"></i></div>
+      <div class="osmall" id="o-gb">${e.state === 'starting' ? 'Loading the AI…' : gb}</div></div>`;
   }
-  if (e.state === 'error') return `<div class="oerr"><b>That didn’t work.</b><span>${h(e.message)}</span><button class="btn" id="o-ai-go">Try again</button></div>`;
-  return `<div class="oerr calm"><span>${h(e.message || 'The AI needs a one-time download.')}</span><button class="btn" id="o-ai-go">Download the AI (${e.size_gb} GB)</button></div>`;
+  if (e.state === 'error') return `<div class="oerr"><b>That didn’t work.</b><span>${h(e.message)}</span><button class="osm" id="o-ai-go">Try again</button></div>`;
+  return `<div class="oerr calm"><span>${h(e.message || 'The AI needs a one-time download.')}</span><button class="osm" id="o-ai-go">Download (${e.size_gb} GB)</button></div>`;
 }
+const aiKind = () => { const e = S.engine; return e.ready ? 'ready' : (e.state === 'downloading' || e.state === 'starting') ? e.state : e.state === 'error' ? 'error' : 'idle'; };
 function stepAI() {
   const e = S.engine;
-  return `<section class="ocard rise">
-    <div class="oicon">${oicon('chip')}</div>
-    <h1 class="otitle">Your built-in AI guard</h1>
-    <p class="olead">The AI reads each message against your class rules. It’s a one-time ${e.size_gb} GB download and it runs entirely on this Mac. Nothing you type is ever sent to a server.</p>
-    <div class="oai" id="o-ai">${aiStatusHTML()}</div>
-    <p class="osmall">You can keep going while it downloads. It finishes in the background.</p>
-    ${onbNav(true, 'Continue')}
-  </section>`;
+  return ostage({ art: 'ai', title: 'Your built-in AI guard',
+    sub: `A one-time ${e.size_gb} GB download. It runs entirely on this Mac, so nothing you type is ever sent to a server.`,
+    body: `<div class="oai" id="o-ai" data-kind="${aiKind()}">${aiStatusHTML()}</div><p class="onote c">You can keep going while it downloads.</p>`,
+    next: nextBtn('Next') });
 }
 
 function stepBrowser() {
   const chosen = S.browser && S.browser.chosen;
-  return `<section class="ocard rise">
-    <div class="oicon">${oicon('globe')}</div>
-    <h1 class="otitle">Pick your browser</h1>
-    <p class="olead">Sites like Gemini and ChatGPT hide their send button from your Mac, so a tiny extension covers the gap. Choose the one browser you’ll use for AI while you study.</p>
-    <div id="o-brpanel">${browserPanelHTML()}</div>
-    <div class="onav"><button class="btn ghost big" id="o-back">Back</button><div class="onav-r"><a href="#" class="oskip" id="o-skipbrowser">Skip for now</a><button class="btn big" id="o-next" ${chosen ? '' : 'disabled'}>Continue</button></div></div>
-  </section>`;
+  return ostage({ art: 'browser', small: !!chosen, title: 'Pick your browser',
+    sub: 'Gemini and ChatGPT hide their send button from your Mac, so a tiny extension covers the gap. Choose the one browser you’ll use for AI.',
+    body: `<div id="o-brpanel">${browserPanelHTML()}</div>`,
+    next: nextBtn('Next', 'o-next', !chosen), skip: skipLnk('Skip for now', 'o-skipbrowser') });
 }
 
 function stepAccount() {
   const on = S.cloud_user && S.cloud_user.signed_in;
-  return `<section class="ocard rise">
-    <div class="oicon">${oicon('people')}</div>
-    <h1 class="otitle">Walk this out together</h1>
-    <p class="olead">An account lets you pair up with a friend, parent or mentor. They see when you lock in and any prompt you send despite a warning. It’s optional, and you can do it any time from the Community tab.</p>
-    <div class="otrio two">
-      <div><b>They can see</b><span>Prompts you send despite a warning, your session times, and daily counts.</span></div>
-      <div><b>They never see</b><span>Your syllabi, your assignments, or what you typed in clean or flagged messages.</span></div>
-    </div>
-    ${on ? `<div class="oready">${CHECK}<div><b>You’re signed in</b><span>Nice. You can invite someone from the Community tab.</span></div></div>` : ''}
-    <div class="onav"><button class="btn ghost big" id="o-back">Back</button><div class="onav-r">
-      ${on ? '' : '<button class="btn big" id="o-acct-now">Set up an account</button>'}
-      <button class="btn ${on ? '' : 'ghost'} big" id="o-next">${on ? 'Continue' : 'Maybe later'}</button></div></div>
-  </section>`;
+  const body = `<div class="otrio3 two"><div><b>They can see</b><span>Prompts you sent despite a warning, session times, daily counts</span></div>
+      <div><b>They never see</b><span>Syllabi, assignments, or clean and flagged messages</span></div></div>
+    ${on ? `<div class="oready">${CHECK}<div><b>You’re signed in</b><span>Invite someone from the Community tab.</span></div></div>` : ''}`;
+  return ostage({ art: 'account', title: 'Walk this out together',
+    sub: 'Pair up with a friend, parent or mentor so they can see when you lock in. It’s optional, and you can do it any time.', body,
+    next: on ? nextBtn('Next') : nextBtn('Set up an account', 'o-acct-now'),
+    skip: on ? '' : skipLnk('Maybe later', 'o-next') });
 }
 
 function stepClass() {
   const has = S.classes.length > 0;
-  return `<section class="ocard rise">
-    <div class="oicon">${oicon('book')}</div>
-    <h1 class="otitle">Add your first class</h1>
-    <p class="olead">Give HonestHands a syllabus (a PDF, a Word file, or pasted text). It pulls out the rules about AI word for word, and the guard uses them for every message. Add an assignment later to make it even sharper.</p>
-    ${has ? `<div class="oready">${CHECK}<div><b>${h(S.classes[0].name)} added${S.classes.length > 1 ? ` and ${S.classes.length - 1} more` : ''}</b><span>You can add more or edit these any time in Classes.</span></div></div>` : ''}
-    <div class="onav"><button class="btn ghost big" id="o-back">Back</button><div class="onav-r">
-      <button class="btn ${has ? 'ghost' : ''} big" id="o-add">${has ? 'Add another' : 'Add a class'}</button>
-      <button class="btn ${has ? '' : 'ghost'} big" id="o-done">${has ? 'Finish' : 'Finish without a class'}</button></div></div>
-  </section>`;
+  const body = has ? `<div class="oready">${CHECK}<div><b>${h(S.classes[0].name)} added${S.classes.length > 1 ? ` and ${S.classes.length - 1} more` : ''}</b><span>Add more or edit any time in Classes.</span></div></div>` : '';
+  return ostage({ art: 'klass', title: 'Add your first class',
+    sub: 'Give it a syllabus (PDF, Word, or pasted text). It pulls out the AI rules word for word, and the guard uses them for every message.', body,
+    next: has ? nextBtn('Finish', 'o-done') : nextBtn('Add a class', 'o-add'),
+    skip: has ? skipLnk('Add another', 'o-add') : skipLnk('Finish without a class', 'o-done') });
 }
 
 // ---------------------------------------------------------------- paint + wiring
+let ONB_DIR = 1;      // 1 = moving forward, -1 = back: which way the page slides in
 function paintOnboarding(animate = true) {
   const m = document.getElementById('main');
   const steps = [stepWelcome, stepAccess, stepAI, stepBrowser, stepAccount, stepClass];
   ONB = Math.min(ONB, steps.length - 1);
-  m.innerHTML = `<div class="wrap onb2">${ONB > 0 ? onbProgress(ONB) : ''}${steps[ONB]()}</div>`;
-  if (animate) { m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter'); }
+  const surf = document.getElementById('surface'); if (surf) surf.classList.add('onbing');
+  const keep = m.querySelector('.onb3');
+  const scroll = keep && !animate ? keep.scrollTop : 0;
+  m.innerHTML = `<div class="onb3 bg-${OBG[ONB]} ${animate ? (ONB_DIR > 0 ? 'go-fwd' : 'go-back') : 'still'}">
+    <div class="otop">${ONB > 0 ? '<button class="oback" id="o-back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>' : '<span class="oback ph"></span>'}
+      <div class="obars">${onbProgress(ONB)}</div><span class="ocount">${ONB + 1}/${steps.length}</span></div>
+    <div class="oscroll">${steps[ONB]()}</div></div>`;
+  m.classList.remove('enter');
+  const root = m.firstElementChild;
+  if (scroll) root.querySelector('.oscroll').scrollTop = scroll;
+  if (animate) inkArt(root.querySelector('.oart'));
+  oartParallax(root.querySelector('.oart-wrap'));
   wireOnboarding();
   lastOnbSig = onbStructSig();
   // arriving at the AI step starts the download for you
@@ -156,24 +152,49 @@ function paintOnboarding(animate = true) {
     ONB_FLAGS.aiStarted = true;
     api().setup_ai().then(r => { if (r && !r.error) { S = r; if (ONB === 2) updateOnbStatus(); } });
   }
+  // a small celebration when a checkmark first lands
+  const doneNow = document.querySelectorAll('.orow.done .ocheck, .oready .ocheck');
+  if (doneNow.length && !animate) setTimeout(() => oconfettiAt(doneNow[doneNow.length - 1], 14, .6), 250);
 }
 
 // progress ticking: update in place so nothing flickers
 function updateOnbStatus() {
   const box = document.getElementById('o-ai');
-  if (box) { box.innerHTML = aiStatusHTML(); const go = document.getElementById('o-ai-go'); if (go) go.onclick = startAI; }
+  if (!box) return;
+  const kind = aiKind();
+  if (box.dataset.kind === kind && (kind === 'downloading') && document.getElementById('o-pct')) {
+    const pr = S.engine.progress, pct = pr && pr.total ? Math.round(100 * pr.done / pr.total) : 0;
+    otween(document.getElementById('o-pct'), pct, 1200);
+    document.getElementById('o-fill').style.width = pct + '%';
+    const gb = document.getElementById('o-gb'); if (gb && pr && pr.total) gb.textContent = `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB`;
+    return;
+  }
+  const was = box.dataset.kind;
+  box.dataset.kind = kind;
+  box.innerHTML = aiStatusHTML();
+  const go = document.getElementById('o-ai-go'); if (go) go.onclick = startAI;
+  if (kind === 'ready' && was !== 'ready') setTimeout(() => oconfettiAt(box.querySelector('.ocheck'), 30, 1), 300);
 }
 async function startAI() {
   const r = await api().setup_ai();
   if (r && !r.error) { S = r; updateOnbStatus(); }
 }
 
+function oripple(btn, e) {
+  if (OART_REDUCED()) return;
+  const r = btn.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2, i = document.createElement('i');
+  i.className = 'orip'; i.style.cssText = `width:${d}px;height:${d}px;left:${(e.clientX || r.left + r.width / 2) - r.left - d / 2}px;top:${(e.clientY || r.top + r.height / 2) - r.top - d / 2}px`;
+  btn.appendChild(i); setTimeout(() => i.remove(), 700);
+}
+
 function wireOnboarding() {
   const $$ = (id) => document.getElementById(id);
-  const on = (id, fn) => { const n = $$(id); if (n) n.onclick = fn; };
-  on('o-next', () => { ONB++; paintOnboarding(); });
-  on('o-back', () => { ONB = Math.max(0, ONB - 1); paintOnboarding(); });
-  on('o-skipbrowser', (e) => { e.preventDefault(); ONB++; paintOnboarding(); });
+  const on = (id, fn) => { const n = $$(id); if (n) n.onclick = (e) => { if (e && e.preventDefault && n.tagName === 'A') e.preventDefault(); if (n.classList.contains('obtn')) oripple(n, e); fn(e); }; };
+  const go = (d) => { ONB_DIR = d; ONB = Math.max(0, ONB + d); const r = document.querySelector('.onb3'); 
+    if (r && !OART_REDUCED()) { r.classList.add('bye'); setTimeout(() => paintOnboarding(), 170); } else paintOnboarding(); };
+  on('o-next', () => go(1));
+  on('o-back', () => go(-1));
+  on('o-skipbrowser', () => go(1));
   on('o-done', finishOnboarding);
   on('o-add', () => openDocFlow('class'));
   on('o-ai-go', startAI);
@@ -182,7 +203,7 @@ function wireOnboarding() {
   on('o-notif', async () => { await api().test_notification(); ONB_FLAGS.notifTried = true; paintOnboarding(false); });
   on('o-notif-yes', () => { ONB_FLAGS.notifOk = true; paintOnboarding(false); });
   on('o-notif-no', async () => { await api().open_notification_settings(); });
-  on('o-notif-open', async (e) => { e.preventDefault(); await api().open_notification_settings(); });
+  on('o-notif-open', async () => { await api().open_notification_settings(); });
 
   const bp = document.getElementById('o-brpanel');
   if (bp) wireBrowserPanel(bp, () => paintOnboarding(false));
@@ -196,7 +217,11 @@ async function finishOnboarding() {
   S = r;
   const veil = document.createElement('div');                       // a short, warm finish instead of an abrupt jump
   veil.className = 'ofinish';
-  veil.innerHTML = `<div class="ofin-card">${CHECK}<h1>You’re all set</h1><p>HonestHands is ready to guard. Start a study session whenever you sit down to work.</p></div>`;
+  veil.innerHTML = `<div class="ofin-card">${oartHTML('finish', 'big')}<h1>You’re all set</h1><p>HonestHands is ready to guard. Start a study session whenever you sit down to work.</p></div>`;
   document.body.appendChild(veil);
-  setTimeout(() => { TAB = 'home'; paint(); veil.classList.add('out'); setTimeout(() => veil.remove(), 500); }, 1700);
+  inkArt(veil.querySelector('.oart'));
+  setTimeout(() => oconfetti(window.innerWidth / 2, window.innerHeight * .38, 46, 1.6), 500);
+  setTimeout(() => oconfetti(window.innerWidth * .3, window.innerHeight * .5, 22, 1.1), 900);
+  setTimeout(() => oconfetti(window.innerWidth * .7, window.innerHeight * .5, 22, 1.1), 1100);
+  setTimeout(() => { TAB = 'home'; paint(); veil.classList.add('out'); setTimeout(() => veil.remove(), 600); }, 2600);
 }

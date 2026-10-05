@@ -110,6 +110,7 @@ function paint() {
   const rail = document.getElementById('rail');
   if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.visibility='hidden'; paintOnboarding(); return; }
   rail.style.visibility = 'visible'; document.getElementById('topbar').style.visibility='visible';
+  const sf = document.getElementById('surface'); if (sf) sf.classList.remove('onbing');
   paintWelcome(); paintBadge();
   document.querySelectorAll('#rail .railbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === TAB));
   const meta = TAB_META[TAB] || TAB_META.home;
