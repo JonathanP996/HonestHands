@@ -42,6 +42,8 @@ def mv2_manifest(m, firefox=False):
     perms = list(m.pop('permissions', [])) + list(m.pop('host_permissions', []))
     m['permissions'] = perms
     m['background'] = {'scripts': ['background.js'], 'persistent': False}
+    if 'action' in m:
+        m['browser_action'] = m.pop('action')            # Manifest V2 calls the toolbar button browser_action
     if firefox:
         m['browser_specific_settings'] = {'gecko': {'id': FIREFOX_ID, 'strict_min_version': '115.0'}}
     return m
