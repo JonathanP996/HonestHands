@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-DB = {'pw': {}, 'users': {}, 'profiles': {}, 'partnerships': [], 'events': {}, 'sessions': {}, 'daily': {}, 'codes': {}, 'tokens': {}}
+DB = {'messages': [], 'unlocks': [], 'pw': {}, 'users': {}, 'profiles': {}, 'partnerships': [], 'events': {}, 'sessions': {}, 'daily': {}, 'codes': {}, 'tokens': {}}
 
 
 def new_user(email):
@@ -21,6 +21,44 @@ def new_user(email):
     DB['users'][email] = uid
     DB['profiles'][uid] = {'id': uid, 'handle': None, 'display_name': email.split('@')[0], 'last_seen': None}
     return uid
+
+
+def _split_top(s):
+    out, depth, cur = [], 0, ''
+    for ch in s:
+        if ch == '(': depth += 1
+        if ch == ')': depth -= 1
+        if ch == ',' and depth == 0: out.append(cur); cur = ''
+        else: cur += ch
+    return out + [cur]
+
+
+def _term(row, term):
+    if term.startswith('and('):
+        return all(_term(row, x) for x in _split_top(term[4:-1]))
+    col, op, val = term.split('.', 2)
+    v = row.get(col)
+    if op == 'eq': return str(v) == val
+    if op == 'is' and val == 'null': return v is None
+    return True
+
+
+def _filter(rows, q):
+    out = []
+    for r in rows:
+        ok = True
+        for k, expr in q.items():
+            if k in ('select', 'order', 'limit', 'on_conflict'): continue
+            if k == 'or':
+                ok = ok and any(_term(r, x) for x in _split_top(expr[1:-1])); continue
+            op, _, val = expr.partition('.')
+            v = r.get(k)
+            if op == 'eq': ok = ok and str(v) == val
+            elif op == 'is': ok = ok and v is None
+            elif op == 'gte': ok = ok and str(v) >= val
+            elif op == 'in': ok = ok and str(v) in val[1:-1].split(',')
+        if ok: out.append(r)
+    return out
 
 
 class H(BaseHTTPRequestHandler):
@@ -94,10 +132,40 @@ class H(BaseHTTPRequestHandler):
             if m == 'DELETE':
                 pid = q['id'].replace('eq.', ''); DB['partnerships'] = [r for r in DB['partnerships'] if r['id'] != pid]; return self._send(204, None)
             out = []
-            for r in DB['partnerships']:
+            for r in _filter(DB['partnerships'], q):
                 if uid in (r['subject'], r['watcher']):
                     out.append(dict(r, subject_p=DB['profiles'][r['subject']], watcher_p=DB['profiles'][r['watcher']]))
             return self._send(200, out)
+        def active(s, w): return any(r['subject'] == s and r['watcher'] == w and r['status'] == 'active' for r in DB['partnerships'])
+        def connected(a, b): return active(a, b) or active(b, a)
+        def prof(i): return DB['profiles'].get(i)
+        if t == 'messages':
+            if m == 'POST':
+                if body['from_user'] != uid or not connected(uid, body['to_user']): return self._send(403, {'code': '42501', 'message': 'row-level security'})
+                DB['messages'].append(dict(body, id=str(uuid.uuid4()), kind='text', created_at=time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + '.%06d+00:00' % (len(DB['messages']) + 1), read_at=None)); return self._send(201, None)
+            vis = [r for r in DB['messages'] if uid in (r['from_user'], r['to_user'])]
+            if m == 'PATCH':
+                for r in _filter([r for r in vis if r['to_user'] == uid], q): r['read_at'] = body['read_at']
+                return self._send(204, None)
+            rows = [dict(r, sender=prof(r['from_user'])) for r in _filter(vis, q)]
+            rows.sort(key=lambda r: r['created_at'], reverse='desc' in q.get('order', ''))
+            return self._send(200, rows)
+        if t == 'unlock_requests':
+            if m == 'POST':
+                for r in (body if isinstance(body, list) else [body]):
+                    if r['subject'] != uid or not active(uid, r['watcher']): return self._send(403, {'code': '42501', 'message': 'row-level security'})
+                    DB['unlocks'].append(dict(r, id=str(uuid.uuid4()), status='pending', created_at=time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + '.%06d+00:00' % (len(DB['unlocks']) + 1)))
+                return self._send(201, None)
+            vis = [r for r in DB['unlocks'] if uid in (r['subject'], r['watcher'])]
+            if m == 'PATCH':
+                for r in _filter(vis, q):
+                    if r['status'] != 'pending': return self._send(400, {'message': 'This release request has already been decided'})
+                    if body['status'] in ('approved', 'denied') and uid != r['watcher']: return self._send(400, {'message': 'Only the friend who was asked can decide'})
+                    if body['status'] == 'cancelled' and uid != r['subject']: return self._send(400, {'message': 'Only the person who asked can cancel'})
+                    r['status'] = body['status']
+                return self._send(204, None)
+            rows = [dict(r, w=prof(r['watcher']), who=prof(r['subject'])) for r in _filter(vis, q)]
+            return self._send(200, sorted(rows, key=lambda r: r['created_at'], reverse=True))
         if t in ('events', 'sessions', 'daily'):
             store = DB[t]
             if m == 'POST':
@@ -135,6 +203,11 @@ T0 = time.time() - 600
 
 
 class FakeApp:
+    released = []
+    @staticmethod
+    def locked_now(): return True
+    @classmethod
+    def release_session(cls, why): cls.released.append(why)
     class api:
         @staticmethod
         def sessions(n):
@@ -198,6 +271,41 @@ ovb = B.overview(); check(len(ovb['feed']) == 2 and ovb['feed'][0]['who']['displ
 fr = B.friend(ovb['watching'][0]['person']['id']); check(fr['totals']['overridden'] >= 1 and len(fr['events']) == 2 and fr['streak'] >= 1, 'Bob can open Alice\'s profile (streak, totals, prompts)')
 C = cloud.Cloud(FakeStore([]), FakeApp()); C.send_code('carol@school.edu'); C.verify('carol@school.edu', '123456'); C.set_profile('carol', 'Carol')
 check(C.overview()['feed'] == [], 'a stranger sees no feed')
+
+# ---- messages between connected friends ----
+check(len(A.connected()) == 1 and A.connected()[0]['display_name'] == 'Bob', 'A is connected to Bob')
+A.send_message(B.uid, 'hello Bob')
+cv = B.conversations(); check(cv[0]['unread'] == 1 and cv[0]['last']['body'] == 'hello Bob', 'Bob sees 1 unread message from Alice')
+B._refresh_inbox(); check(B.inbox['unread'] == 1, 'Bob\'s inbox counts it')
+th = B.thread(A.uid); check(len(th['messages']) == 1 and B.conversations()[0]['unread'] == 0, 'opening the thread shows it and marks it read')
+B.send_message(A.uid, 'hi Alice'); check([m['body'] for m in A.thread(B.uid)['messages']] == ['hello Bob', 'hi Alice'], 'the thread shows both sides in order')
+try: C.send_message(A.uid, 'psst'); check(False, 'strangers cannot message')
+except cloud.CloudError: check(True, 'a stranger cannot message Alice')
+try: A.send_message(B.uid, '   '); check(False, 'empty message')
+except cloud.CloudError: check(True, 'an empty message is refused')
+
+# ---- release requests for a timed lock-in ----
+A.store.data['session'] = {'started': time.time() - 120}; A.store.data['pin'] = ''
+check(A.exit_paths() == {'pin': False, 'friends': 0} or A.exit_paths()['friends'] >= 0, 'exit paths are reported')
+A._refresh_inbox(); check(A.exit_paths()['friends'] == 1, 'Alice knows 1 friend can release her')
+try: C.request_unlock('let me out'); check(False, 'stranger request')
+except cloud.CloudError as e: check('No friend can release you' in str(e), 'with no friend, a release request explains how to get one')
+r = A.request_unlock('Please let me out, I have a call', class_label='Machine Learning', minutes_left=40); check(r['sent'] == 1, 'Alice asks Bob to release her')
+inc = B.incoming_unlocks(); check(len(inc) == 1 and 'call' in inc[0]['note'] and inc[0]['who']['display_name'] == 'Alice', 'Bob sees the request with her note')
+B._refresh_inbox(); check(B.inbox['requests'] == 1, 'Bob\'s inbox counts the request')
+check(A.unlock_status(time.time() - 600)[0]['status'] == 'pending', 'Alice sees it is still pending')
+try: A._rest('PATCH', f'unlock_requests?id=eq.{inc[0]["id"]}', {'status': 'approved'}); check(False, 'self approval')
+except cloud.CloudError as e: check('Only the friend' in str(e), 'Alice cannot approve her own request')
+FakeApp.released.clear(); A._check_release(); check(FakeApp.released == [], 'nothing is released while the request is pending')
+B.decide_unlock(inc[0]['id'], True)
+check(A.unlock_status(time.time() - 600)[0]['status'] == 'approved', 'Alice sees Bob approved it')
+A._check_release(); check(FakeApp.released and 'Bob released you' in FakeApp.released[0], 'Alice\'s app releases her the moment Bob approves')
+B.decide_unlock(inc[0]['id'], False); check(A.unlock_status(time.time() - 600)[0]['status'] == 'approved', 'a decision is final (Bob can\'t flip it)')
+A.store.data['session'] = {'started': time.time() + 60}; FakeApp.released.clear(); A._check_release()
+check(FakeApp.released == [], 'an approval from BEFORE this session does not release a new one')
+A.request_unlock('again'); n2 = [x for x in A.unlock_status(time.time() - 600) if x['status'] == 'pending']
+A.cancel_unlock(n2[0]['id']); check(not [x for x in A.unlock_status(time.time() - 600) if x['status'] == 'pending'], 'Alice can cancel her own pending request')
+
 B.end(ovb['watching'][0]['id']); check(len(B.overview()['watching']) == 0, 'Bob can end the connection')
 A.sign_out(); check(not A.signed_in, 'signing out clears the session')
 print('\nALL PASSED' if not check.bad else f'\n{check.bad} FAILED'); sys.exit(1 if check.bad else 0)

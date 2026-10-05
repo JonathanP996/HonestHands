@@ -1,6 +1,10 @@
 """AI Integrity Guard: the Mac app."""
 import os
 import sys
+
+if len(sys.argv) > 1 and sys.argv[1] == '--watchdog':      # the timed-lock watcher: no UI, no heavy imports
+    import watchdog
+    raise SystemExit(watchdog.main(sys.argv[2:]))
 import threading
 import time
 
@@ -49,6 +53,7 @@ def ensure_single_instance():
 from engine import Engine
 from ai_guard import AIGuard
 import cloud
+import keepalive
 import lock
 from store import Store
 
@@ -104,6 +109,38 @@ class App:
         self._ext_last_ping = 0.0
         self._ext_pings = {}        # browser key -> time of the extension's last check-in
 
+    # ---------- timed lock-in ----------
+    def locked_now(self):
+        s = self.store.data.get('session') or {}
+        return bool(s.get('locked') and s.get('ends_at', 0) > time.time())
+
+    def release_session(self, why):
+        """A friend released the student (or time ran out): end the lock-in."""
+        self.api._finish_session(why, ended_by=why)
+
+    def _lock_tick(self):
+        """Every couple of seconds: finish a lock-in whose time is up, and keep the menu bar's countdown fresh."""
+        last_menu = 0
+        while True:
+            time.sleep(2)
+            try:
+                s = self.store.data.get('session') or {}
+                if self.api.finish_if_due():
+                    pass
+                elif s.get('locked') and time.time() - last_menu > 30:
+                    last_menu = time.time()
+                    self.refresh_menu()
+            except Exception as e:
+                print('[lock] tick problem:', e, flush=True)
+
+    def _need_out(self):
+        """Bring the window forward and open the 'Need out?' sheet (PIN or ask a friend)."""
+        self.show_window()
+        try:
+            self.window.evaluate_js("typeof openNeedOut === 'function' && openNeedOut()")
+        except Exception:
+            pass
+
     # ---------- window ----------
     def show_window(self):
         if self.window:
@@ -111,12 +148,15 @@ class App:
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
 
     def on_closing(self):
-        # If a PIN-locked session is running, don't let the window close; nudge the user.
-        if not self.quitting and self.store.data.get('session') and self.store.data.get('pin'):
+        if not self.quitting and self.locked_now():
             try:
-                self.window.evaluate_js("showToast('End your study session (with the PIN) before quitting.')")
+                self.window.hide()                  # a lock-in keeps HonestHands running; closing just tucks the window away
             except Exception:
                 pass
+            return False
+        # An open-ended session with a PIN can't be closed away either.
+        if not self.quitting and self.store.data.get('session') and self.store.data.get('pin'):
+            self._need_out()
             return False
         # Otherwise, closing the window quits HonestHands cleanly.
         self.quitting = True
@@ -173,6 +213,9 @@ class App:
         cls, asg = self.store.session_targets()
         menu = NSMenu.alloc().init()
         title = (f'Guarding {cls["name"]}' + (f' / {asg["name"]}' if asg else '')) if cls else 'Not in a study session'
+        s = self.store.data.get('session') or {}
+        if cls and s.get('ends_at') and s['ends_at'] > time.time():
+            title = f'Locked in · {cls["name"]} · {max(1, int((s["ends_at"] - time.time()) / 60))} min left'
         header = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, None, '')
         header.setEnabled_(False)
         menu.addItem_(header)
@@ -190,17 +233,14 @@ class App:
         AppHelper.callAfter(self.build_menu)
 
     def quit(self):
-        if self.store.data.get('session') and self.store.data.get('pin'):
-            self.show_window()
-            try:
-                self.window.evaluate_js("showToast('End your study session (with the PIN) before quitting.')")
-            except Exception:
-                pass
+        if self.locked_now() or (self.store.data.get('session') and self.store.data.get('pin')):
+            self._need_out()
             return
         self.quitting = True
         self.engine.stop_server()
         if getattr(self, 'native_overlay', None):
             self.native_overlay.close()
+        keepalive.remove()
         self._terminate()
 
     # ---------- startup ----------
@@ -234,6 +274,8 @@ class App:
         AppHelper.callAfter(self.setup_main_thread)
         self.engine.autostart()
         self.cloud.start()
+        threading.Thread(target=self._lock_tick, daemon=True).start()
+        (keepalive.install if self.locked_now() else keepalive.remove)()     # a stale watcher must never outlive its lock-in
         AppHelper.callAfter(self.lock.start)           # app-switch notifications must be registered on the main thread
         def _warm_when_ready():
             import time as _t

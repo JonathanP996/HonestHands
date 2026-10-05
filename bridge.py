@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import browsers as browserlib
 import cloud as cloudlib
 import extensions
+import keepalive
 import distill
 import docs
 import rules
@@ -101,6 +102,8 @@ class Api:
             sess = {'class_id': cls['id'], 'class': cls['name'], 'policy': cls.get('policy'), 'color': ccolor,
                     'assignment_id': asg['id'] if asg else None, 'assignment': asg['name'] if asg else '',
                     'started': started, 'elapsed': int(time.time() - started) if started else 0,
+                    'ends_at': s.data['session'].get('ends_at'), 'locked': bool(s.data['session'].get('locked')),
+                    'minutes': s.data['session'].get('minutes') or 0,
                     # counts for THIS session only (everything logged since it started)
                     'stats': tally([e for e in s.read_log() if 'result' in e and e['t'] >= (started or 0)])}
         return {
@@ -118,32 +121,85 @@ class Api:
             'ext_live': self._app.extension_seen_recently(),
             'stats': dict(tally(msgs), today=len(msgs)),
             'policy_labels': rules.POLICY_LABEL,
+            'exit': self._app.cloud.exit_paths(), 'inbox': self._app.cloud.inbox,
+            'now': time.time(),
             'cloud_user': {'signed_in': self._app.cloud.signed_in, 'name': self._app.cloud.c.get('display_name') or ''},
         }
 
     # ---------- session ----------
-    def start_session(self, class_id, assignment_id, mode):
+    def start_session(self, class_id, assignment_id, mode, minutes=0):
         if not self._store.cls(class_id):
             return _err('Pick a class first.')
-        self._store.data['session'] = {'class_id': class_id, 'assignment_id': assignment_id or None, 'started': time.time()}
+        try:
+            minutes = int(minutes or 0)
+        except (TypeError, ValueError):
+            minutes = 0
+        if minutes < 0 or minutes > 12 * 60:
+            return _err('Choose a lock-in between 1 minute and 12 hours.')
+        if minutes:
+            # a timed lock can only be started if there is a way out, so nobody can trap themselves
+            if not self._store.data.get('pin'):
+                try:
+                    self._app.cloud.releasers()               # refresh the friend count right now
+                except Exception:
+                    pass
+            ex = self._app.cloud.exit_paths()
+            if not ex['pin'] and not ex['friends']:
+                return _err('To lock in for a set time you need a way out for emergencies: set an accountability PIN in Settings, '
+                            'or invite a friend who can release you in Community.')
+        now = time.time()
+        sess = {'class_id': class_id, 'assignment_id': assignment_id or None, 'started': now}
+        if minutes:
+            sess.update(ends_at=now + minutes * 60, locked=True, minutes=minutes)
+        self._store.data['session'] = sess
         self._store.data['mode'] = 'warn'
         self._store.save()
         c, a = self._store.session_targets()
-        self._store.log({'t': time.time(), 'event': 'session start', 'class': c['name'],
-                         'assignment': a['name'] if a else '', 'mode': self._store.data['mode']})
+        self._store.log({'t': now, 'event': 'session start', 'class': c['name'],
+                         'assignment': a['name'] if a else '', 'mode': self._store.data['mode'], 'minutes': minutes})
+        if minutes:
+            keepalive.install()                              # a watcher that relaunches the app if it is force-quit
         self._app.refresh_menu()
         self._app.ai_guard.warm(c, a)
         return self.state()
 
-    def end_session(self, pin=''):
-        if not self._pin_ok(pin):
-            return _err('That PIN doesn\'t match.')
+    def _finish_session(self, reason='', ended_by=''):
+        """Ends the running session (and the lock, and its watcher). Used by every way a session can end."""
         c, _ = self._store.session_targets()
         self._store.data['session'] = None
         self._store.save()
+        keepalive.remove()
         if c:
-            self._store.log({'t': time.time(), 'event': 'session end', 'class': c['name']})
+            e = {'t': time.time(), 'event': 'session end', 'class': c['name']}
+            if reason:
+                e['reason'] = reason
+            self._store.log(e)
         self._app.refresh_menu()
+        if ended_by:
+            import watcher
+            watcher.notify('HonestHands', ended_by)
+
+    def finish_if_due(self):
+        """Ends a timed lock-in whose time is up. True if it did."""
+        s = self._store.data.get('session') or {}
+        if s.get('ends_at') and time.time() >= s['ends_at']:
+            self._finish_session('time was up', ended_by='Your lock-in is complete. Nicely done.')
+            return True
+        return False
+
+    def end_session(self, pin=''):
+        if self._app.locked_now():
+            saved = self._store.data.get('pin')
+            end = datetime.fromtimestamp(self._store.data['session']['ends_at']).strftime('%-I:%M %p')
+            if not saved:
+                return _err(f'This lock-in runs until {end}. You can leave early only if a friend releases you.')
+            if str(pin or '') != saved:
+                return _err('That PIN doesn\'t match.')
+            self._finish_session('ended early with the PIN')
+            return self.state()
+        if not self._pin_ok(pin):
+            return _err('That PIN doesn\'t match.')
+        self._finish_session()
         return self.state()
 
     def set_mode(self, mode, pin=''):
@@ -594,6 +650,37 @@ class Api:
 
     def cloud_friend(self, user_id):
         return self._cloud(self._app.cloud.friend, user_id)
+
+    def cloud_conversations(self):
+        return self._cloud(self._app.cloud.conversations)
+
+    def cloud_thread(self, user_id):
+        return self._cloud(self._app.cloud.thread, user_id)
+
+    def cloud_send_message(self, user_id, body):
+        return self._cloud(self._app.cloud.send_message, user_id, body)
+
+    def cloud_releasers(self):
+        return self._cloud(self._app.cloud.releasers)
+
+    def cloud_request_unlock(self, note, watcher_ids):
+        c, _ = self._store.session_targets()
+        s = self._store.data.get('session') or {}
+        left = max(0, int((s.get('ends_at', 0) - time.time()) / 60)) if s.get('ends_at') else 0
+        return self._cloud(self._app.cloud.request_unlock, note, watcher_ids or None, c['name'] if c else '', left)
+
+    def cloud_unlock_status(self):
+        s = self._store.data.get('session') or {}
+        return self._cloud(self._app.cloud.unlock_status, s.get('started') or time.time())
+
+    def cloud_cancel_unlock(self, rid):
+        return self._cloud(self._app.cloud.cancel_unlock, rid)
+
+    def cloud_incoming_unlocks(self):
+        return self._cloud(self._app.cloud.incoming_unlocks)
+
+    def cloud_decide_unlock(self, rid, approve):
+        return self._cloud(self._app.cloud.decide_unlock, rid, bool(approve))
 
     def cloud_sync_now(self):
         self._app.cloud.kick()

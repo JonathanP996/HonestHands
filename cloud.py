@@ -349,24 +349,153 @@ class Cloud:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
-        last_beat = 0
+        last_sync = last_inbox = last_beat = 0
+        self.wake.set()                                  # first pass right away
         while True:
-            self.wake.wait(timeout=45)
+            self.wake.wait(timeout=4)
+            woken = self.wake.is_set()
             self.wake.clear()
             if not self.signed_in:
                 self.status = {'state': 'signed_out', 'message': '', 'last_sync': 0}
                 continue
+            now = time.time()
             try:
-                self.sync_now()
-                if time.time() - last_beat > 240:
-                    self._rest('POST', 'rpc/heartbeat', {}, ok=(200, 204))
-                    last_beat = time.time()
-                self._notify_new_overrides()
-                self.status = {'state': 'ok', 'message': '', 'last_sync': time.time()}
+                if woken or now - last_sync >= 45:
+                    last_sync = now
+                    self.sync_now()
+                    if now - last_beat > 240:
+                        self._rest('POST', 'rpc/heartbeat', {}, ok=(200, 204))
+                        last_beat = now
+                    self._notify_new_overrides()
+                    self.status = {'state': 'ok', 'message': '', 'last_sync': time.time()}
+                if woken or now - last_inbox >= 12:
+                    last_inbox = now
+                    self._refresh_inbox()
+                if self._locked():
+                    self._check_release()                # a friend may have released us: look every few seconds
             except CloudError as e:
                 self.status = {'state': 'offline' if "reach" in str(e) else 'error', 'message': str(e), 'last_sync': self.status.get('last_sync', 0)}
             except Exception as e:                       # never let sync take the app down
                 self.status = {'state': 'error', 'message': str(e), 'last_sync': self.status.get('last_sync', 0)}
+
+    def _locked(self):
+        try:
+            return bool(self.app and self.app.locked_now())
+        except Exception:
+            return False
+
+    # ------------------------------------------------- inbox: messages + release requests
+    inbox = {'unread': 0, 'requests': 0}
+    watchers_n = None
+
+    def _refresh_inbox(self):
+        uid = self.uid
+        unread = self._rest('GET', f'messages?to_user=eq.{uid}&read_at=is.null&select=id,body,created_at,sender:profiles!messages_from_user_fkey(display_name)&order=created_at.desc&limit=50')
+        pending = self._rest('GET', f'unlock_requests?watcher=eq.{uid}&status=eq.pending&select=id,created_at,who:profiles!unlock_requests_subject_fkey(display_name)&order=created_at.desc')
+        self.watchers_n = len(self._rest('GET', f'partnerships?subject=eq.{uid}&status=eq.active&select=id'))
+        self.inbox = {'unread': len(unread), 'requests': len(pending)}
+        first = not hasattr(self, '_seen_ids')
+        if first:
+            self._seen_ids = set()
+        try:
+            import watcher
+        except Exception:
+            watcher = None
+        for m in unread:
+            if m['id'] not in self._seen_ids and not first and watcher:
+                watcher.notify('HonestHands', f"{(m.get('sender') or {}).get('display_name') or 'A friend'}: {m['body'][:90]}")
+            self._seen_ids.add(m['id'])
+        for r in pending:
+            if r['id'] not in self._seen_ids and not first and watcher:
+                watcher.notify('HonestHands', f"{(r.get('who') or {}).get('display_name') or 'A friend'} is asking you to release them from a locked-in session")
+            self._seen_ids.add(r['id'])
+
+    def exit_paths(self):
+        """How a timed lock-in can be ended early: the PIN, or friends who can release you."""
+        return {'pin': bool(self.store.data.get('pin')), 'friends': int(self.watchers_n or 0)}
+
+    # ------------------------------------------------- messages
+    def connected(self):
+        """People you're connected to (active partnership, either direction), as {id, display_name, handle}."""
+        sel = f'select=subject,watcher,subject_p:profiles!partnerships_subject_fkey({PROFILE_COLS}),watcher_p:profiles!partnerships_watcher_fkey({PROFILE_COLS})'
+        out = {}
+        for r in self._rest('GET', f'partnerships?status=eq.active&{sel}'):
+            p = r['watcher_p'] if r['subject'] == self.uid else r['subject_p']
+            if p:
+                out[p['id']] = p
+        return list(out.values())
+
+    def conversations(self):
+        uid = self.uid
+        msgs = self._rest('GET', f'messages?or=(from_user.eq.{uid},to_user.eq.{uid})&select=*&order=created_at.desc&limit=300')
+        rows = []
+        for p in self.connected():
+            mine = [m for m in msgs if p['id'] in (m['from_user'], m['to_user'])]
+            rows.append({'person': p, 'last': mine[0] if mine else None,
+                         'unread': sum(1 for m in mine if m['to_user'] == uid and not m.get('read_at'))})
+        rows.sort(key=lambda r: (r['last'] or {}).get('created_at', ''), reverse=True)
+        return rows
+
+    def thread(self, other):
+        uid = self.uid
+        flt = f'or=(and(from_user.eq.{uid},to_user.eq.{other}),and(from_user.eq.{other},to_user.eq.{uid}))'
+        rows = self._rest('GET', f'messages?{flt}&select=*&order=created_at.asc&limit=200')
+        if any(m['to_user'] == uid and not m.get('read_at') for m in rows):
+            self._rest('PATCH', f'messages?to_user=eq.{uid}&from_user=eq.{other}&read_at=is.null', {'read_at': iso(time.time())}, prefer='return=minimal')
+        return {'messages': rows, 'me': uid}
+
+    def send_message(self, other, body):
+        body = (body or '').strip()
+        if not body:
+            raise CloudError('Type a message first.')
+        self._rest('POST', 'messages', {'from_user': self.uid, 'to_user': other, 'body': body[:2000]}, prefer='return=minimal')
+        return True
+
+    # ------------------------------------------------- release requests
+    def releasers(self):
+        """Friends who can release you (they actively watch you)."""
+        sel = f'select=id,watcher,watcher_p:profiles!partnerships_watcher_fkey({PROFILE_COLS})'
+        rows = self._rest('GET', f'partnerships?subject=eq.{self.uid}&status=eq.active&{sel}')
+        self.watchers_n = len(rows)
+        return [r['watcher_p'] for r in rows if r.get('watcher_p')]
+
+    def request_unlock(self, note='', watcher_ids=None, class_label='', minutes_left=0):
+        allowed = {p['id'] for p in self.releasers()}
+        chosen = [w for w in (watcher_ids or list(allowed)) if w in allowed]
+        if not chosen:
+            raise CloudError('No friend can release you yet. Invite someone with "They can see me" in Community.')
+        rows = [{'subject': self.uid, 'watcher': w, 'note': (note or '').strip()[:500] or None, 'class_label': class_label or None,
+                 'minutes_left': int(minutes_left or 0)} for w in chosen]
+        self._rest('POST', 'unlock_requests', rows, prefer='return=minimal')
+        return {'sent': len(chosen)}
+
+    def unlock_status(self, since):
+        """The release requests you've made since `since` (a timestamp), with who they went to and what happened."""
+        sel = 'select=*,w:profiles!unlock_requests_watcher_fkey(display_name)'
+        return self._rest('GET', f'unlock_requests?subject=eq.{self.uid}&created_at=gte.{iso(since)}&{sel}&order=created_at.desc')
+
+    def cancel_unlock(self, rid):
+        self._rest('PATCH', f'unlock_requests?id=eq.{rid}&status=eq.pending', {'status': 'cancelled'}, prefer='return=minimal')
+        return True
+
+    def incoming_unlocks(self):
+        sel = 'select=*,who:profiles!unlock_requests_subject_fkey(id,display_name,handle)'
+        return self._rest('GET', f'unlock_requests?watcher=eq.{self.uid}&status=eq.pending&{sel}&order=created_at.desc')
+
+    def decide_unlock(self, rid, approve):
+        self._rest('PATCH', f'unlock_requests?id=eq.{rid}&status=eq.pending', {'status': 'approved' if approve else 'denied'}, prefer='return=minimal')
+        self.kick()
+        return True
+
+    def _check_release(self):
+        """While locked in: has a friend approved a request made during THIS session? Then we're released."""
+        sess = self.store.data.get('session') or {}
+        started = sess.get('started') or 0
+        rows = self._rest('GET', f'unlock_requests?subject=eq.{self.uid}&status=eq.approved&created_at=gte.{iso(started)}'
+                                 f'&select=id,w:profiles!unlock_requests_watcher_fkey(display_name)&limit=1')
+        if rows:
+            name = (rows[0].get('w') or {}).get('display_name') or 'A friend'
+            self.app.release_session(f'{name} released you')
 
     def _eid(self, t, text):
         return str(uuid.uuid5(NS, f'{self.uid}|{t:.3f}|{hashlib.sha1((text or "").encode()).hexdigest()}'))

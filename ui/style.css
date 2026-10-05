@@ -816,3 +816,47 @@ body.morphing .sb-in{animation:none;opacity:0}
 .lockrow{display:flex;gap:16px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line);cursor:pointer;margin:0}
 .lockrow:first-of-type{border-top:none}.lockrow b{display:block;font-size:15px;color:var(--ink)}.lockrow span:not(.switch){display:block;font-size:13px;color:var(--muted);margin-top:2px}
 .lockrow .switch{margin-top:3px}
+
+/* =====================================================================
+   Timed lock-in, "Need out?", release requests, messages
+   ===================================================================== */
+.seg.dur{align-items:center}
+.durcustom{display:inline-flex;align-items:center;gap:8px;margin-left:6px;color:var(--muted);font-size:13.5px}
+.durcustom input{width:84px;padding:8px 10px;border-radius:12px}
+.lockbox{margin-top:14px;padding:16px 18px;border-radius:20px;background:color-mix(in srgb,var(--green) 12%,var(--panel-2));border:1px solid color-mix(in srgb,var(--green) 35%,var(--line));
+  display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--ink-2)}
+.lockbox b{font-size:15.5px;color:var(--ink)}.lockbox.warn{background:var(--stop-bg);border-color:color-mix(in srgb,var(--stop) 40%,var(--line))}
+.sb-prog{height:10px;max-width:560px;margin:18px auto 0;border-radius:99px;background:rgba(29,47,42,.14);overflow:hidden}
+.sessbig.cc-ink .sb-prog{background:rgba(255,255,255,.14)}
+.sb-prog i{display:block;height:100%;border-radius:99px;background:#1D2F2A;transition:width 1s linear}.sessbig.cc-ink .sb-prog i{background:#C7D43F}
+.sb-until{margin-top:10px;font-size:14px;font-weight:600;opacity:.65}
+
+.needout{min-width:min(520px,86vw)}
+.no-block{margin:16px 0;padding:16px 18px;border-radius:20px;background:var(--panel-2);border:1px solid var(--line)}
+.no-h{font-family:var(--carve);font-weight:600;font-size:16px;margin-bottom:10px}
+.no-row{display:flex;gap:10px}.no-row input{flex:1}
+.no-status{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.no-st{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--panel);font-size:14px}
+.no-st i{width:9px;height:9px;border-radius:50%;background:var(--brass-2);animation:ping 1.8s infinite;flex:none}.no-st.denied i{background:var(--stop);animation:none}.no-st span{flex:1}
+.no-who{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.chk{display:inline-flex;align-items:center;gap:7px;margin:0;padding:7px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer}
+.chk input{width:auto;margin:0}
+.no-form textarea{margin-bottom:10px}
+
+.relcard{border-color:color-mix(in srgb,var(--brass-2) 55%,var(--line));margin-bottom:18px}
+.relrow{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line);flex-wrap:wrap}.relrow:first-of-type{border-top:none}
+.relnote{margin-top:6px;font-family:var(--fig);font-style:italic;font-size:14.5px;padding-left:10px;border-left:3px solid var(--brass-2);color:var(--ink-2)}
+.prow .unread{color:var(--ink);font-weight:700}
+.ubadge{font-style:normal;min-width:24px;height:24px;border-radius:99px;display:grid;place-items:center;padding:0 7px;font-size:12px;font-weight:800;background:var(--green);color:var(--green-ink)}
+.rbadge{position:absolute;top:-6px;right:-8px;min-width:19px;height:19px;border-radius:99px;display:grid;place-items:center;padding:0 5px;font-style:normal;font-size:11px;font-weight:800;
+  background:var(--stop);color:#fff;box-shadow:0 0 0 2px var(--rail)}
+.railbtn .ico{position:relative}
+
+.chat{display:flex;flex-direction:column;min-width:min(520px,88vw);height:min(560px,72vh)}
+.chathead{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}.chathead h2{font-size:21px}
+.chatlist{flex:1;overflow-y:auto;padding:14px 4px;display:flex;flex-direction:column;gap:8px}
+.bubble{max-width:78%;padding:10px 14px;border-radius:18px;font-size:14.5px;line-height:1.45;display:flex;flex-direction:column;gap:3px;animation:irise .3s ease both}
+.bubble em{font-style:normal;font-size:10.5px;opacity:.6}
+.bubble.mine{align-self:flex-end;background:var(--green);color:var(--green-ink);border-bottom-right-radius:6px}
+.bubble.theirs{align-self:flex-start;background:var(--panel-2);color:var(--ink);border-bottom-left-radius:6px}
+.chatbar{display:flex;gap:10px;align-items:flex-end;padding-top:12px;border-top:1px solid var(--line)}.chatbar textarea{flex:1;resize:none;max-height:120px}

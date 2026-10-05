@@ -18,3 +18,6 @@ What is stored, and who can see it, is defined in `schema.sql` (read the comment
 - Counts only for clean and flagged messages (`sessions`, `daily`).
 - A check-in signal (`profiles.last_seen`) so a partner can see a gap.
 - Never: syllabi, assignment text, or the text of clean or flagged messages.
+
+## Adding messages and release requests to an existing project
+If you set the project up before these features existed, open **SQL Editor > New query**, paste `cloud/migrations/002_messages_and_releases.sql`, and **Run**. It is safe to run more than once. Without it, the app still works but messages and "ask a friend to release me" show an error.

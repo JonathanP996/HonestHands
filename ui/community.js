@@ -112,6 +112,7 @@ function paintCommHome(me) {
       <button class="btn ghost sm" id="so">Sign out</button>
     </div>
 
+    <div id="releases"></div>
     <div class="icard rise" style="--i:1"><div class="ihead"><h2>Invite someone</h2><span class="icap">BY HANDLE</span></div>
       <div class="invite">
         <div class="handlebox"><span>@</span><input id="ih" maxlength="24" placeholder="their_handle" autocapitalize="off" spellcheck="false"></div>
@@ -128,7 +129,8 @@ function paintCommHome(me) {
       <div class="icard rise" style="--i:2"><div class="ihead"><h2>People I watch</h2><span class="icap" id="wcap"></span></div><div id="watching"></div></div>
       <div class="icard rise" style="--i:3"><div class="ihead"><h2>Watching me</h2><span class="icap" id="mcap"></span></div><div id="watchers"></div></div>
     </div>
-    <div class="icard rise" style="--i:4"><div class="ihead"><h2>Overridden prompts</h2><span class="icap">FROM PEOPLE YOU WATCH</span></div><div id="feed"></div></div>
+    <div class="icard rise" style="--i:4"><div class="ihead"><h2>Messages</h2><span class="icap" id="msgcap"></span></div><div id="convos"></div></div>
+    <div class="icard rise" style="--i:5;margin-top:18px"><div class="ihead"><h2>Overridden prompts</h2><span class="icap">FROM PEOPLE YOU WATCH</span></div><div id="feed"></div></div>
   </div>`;
   let mode = 'watch_me';
   $('#mode').querySelectorAll('button').forEach(b => b.onclick = () => { mode = b.dataset.m;
@@ -148,7 +150,9 @@ function paintCommHome(me) {
 }
 
 async function refreshComm() {
-  const ov = await api().cloud_overview();
+  const [ov, inc, convos] = await Promise.all([api().cloud_overview(), api().cloud_incoming_unlocks(), api().cloud_conversations()]);
+  if (document.getElementById('releases')) drawReleases(Array.isArray(inc) ? inc : []);
+  if (document.getElementById('convos')) drawConvos(Array.isArray(convos) ? convos : []);
   if (!document.getElementById('feed')) return;
   if (ov && ov.error) { $('#feed').innerHTML = `<p class="muted">${h(ov.error)}</p>`; return; }
   const sp = ov.status || {};
@@ -209,4 +213,68 @@ async function openFriend(uid) {
     <div class="btnrow" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="fc">Done</button></div>`;
   $('#fc').onclick = closeModal;
   nextFrame(() => node.querySelectorAll('[data-h]').forEach(b => b.style.height = Math.max(parseFloat(b.dataset.h), 2) + '%'));
+}
+
+
+// ---------------------------------------------------------------- release requests (a friend is locked in and wants out)
+function drawReleases(rows) {
+  const box = document.getElementById('releases');
+  if (!rows.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="icard relcard rise"><div class="ihead"><h2>Release requests</h2><span class="icap">${rows.length} WAITING</span></div>` +
+    rows.map(r => { const w = r.who || {};
+      return `<div class="relrow">${avatar(w.display_name, w.id, 46)}<div class="pmain"><b>${h(w.display_name || 'A friend')} wants out of their lock-in</b>
+        <span>${r.class_label ? h(r.class_label) + ' · ' : ''}${r.minutes_left ? r.minutes_left + ' min left · ' : ''}asked ${ago(isoSec(r.created_at))}</span>
+        ${r.note ? `<div class="relnote">“${h(r.note)}”</div>` : ''}</div>
+        <div class="btnrow"><button class="btn sm" data-rel="${r.id}" data-ok="1">Release them</button><button class="btn ghost sm" data-rel="${r.id}" data-ok="0">Not now</button></div></div>`; }).join('') +
+    '<p class="small muted" style="margin-top:10px">Think about it first: they chose this lock-in so they would stay on task. Releasing them is your call.</p></div>';
+  box.querySelectorAll('[data-rel]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const r = await api().cloud_decide_unlock(b.dataset.rel, b.dataset.ok === '1');
+    if (r && r.error) { toast(r.error); b.disabled = false; return; }
+    toast(b.dataset.ok === '1' ? 'They’ve been released.' : 'Request declined.'); refreshComm();
+  });
+}
+
+// ---------------------------------------------------------------- messages
+function drawConvos(rows) {
+  const unread = rows.reduce((a, r) => a + r.unread, 0);
+  $('#msgcap').textContent = unread ? `${unread} UNREAD` : '';
+  $('#convos').innerHTML = rows.map(r => { const p = r.person, last = r.last;
+    return `<button class="prow clickable" data-chat="${p.id}">${avatar(p.display_name, p.id)}
+      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(last.body.slice(0, 70)) : 'Say hello'}</span></div>
+      ${r.unread ? `<i class="ubadge">${r.unread}</i>` : '<span class="chev">›</span>'}</button>`; }).join('')
+    || '<p class="muted small">Messages appear here once you and a friend are connected (one of you can see the other).</p>';
+  $('#convos').querySelectorAll('[data-chat]').forEach(b => b.onclick = () => openChat(rows.find(r => r.person.id === b.dataset.chat).person));
+}
+
+let CHAT_TIMER = null;
+async function openChat(person) {
+  clearInterval(CHAT_TIMER);
+  const node = el(`<div class="chat"><div class="chathead">${avatar(person.display_name, person.id, 44)}<div><h2>${h(person.display_name)}</h2><span class="muted small">@${h(person.handle || '')}</span></div></div>
+    <div class="chatlist" id="chatlist"><p class="muted small">Loading…</p></div>
+    <div class="chatbar"><textarea id="chatin" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button class="btn" id="chatsend">Send</button></div></div>`);
+  modal(node);
+  let sig = '';
+  const load = async (stick) => {
+    const box = document.getElementById('chatlist'); if (!box) { clearInterval(CHAT_TIMER); return; }
+    const d = await api().cloud_thread(person.id);
+    if (!d || d.error) { box.innerHTML = `<p class="muted small">${h((d && d.error) || 'Could not load.')}</p>`; return; }
+    const s = d.messages.map(m => m.id).join(','); if (s === sig) return; sig = s;
+    const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = d.messages.length ? d.messages.map(m => `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
+      : '<p class="muted small" style="text-align:center;margin-top:30px">No messages yet. Say hello.</p>';
+    if (stick || atEnd) box.scrollTop = box.scrollHeight;
+  };
+  const send = async () => {
+    const inp = $('#chatin'), body = inp.value.trim(); if (!body) return;
+    inp.value = ''; $('#chatsend').disabled = true;
+    const r = await api().cloud_send_message(person.id, body);
+    $('#chatsend').disabled = false; inp.focus();
+    if (r && r.error) { toast(r.error); inp.value = body; return; }
+    await load(true);
+  };
+  $('#chatsend').onclick = send;
+  $('#chatin').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+  await load(true); $('#chatin').focus();
+  CHAT_TIMER = setInterval(() => load(false), 4000);
 }

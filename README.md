@@ -51,7 +51,7 @@ This produces **HonestHands.app** and **HonestHands.dmg**. First launch: right-c
 - **Activity** — every check, newest first, filterable by outcome, with paging.
 - **History** — your sessions as large blocks, grouped by day. Click one to see every prompt from that session.
 - **Insights** — clean rate, time locked in, where you use AI, a streak calendar, time per class, and your week.
-- **Community** — create an account (email and password), then invite people by handle. One-way or mutual. They see only: prompts you sent despite a warning (with their text), session times, daily counts, and when the app last checked in. Never your syllabi, assignments, or the text of clean or flagged messages. Turn "Share my activity" off at any time.
+- **Community** — create an account (email and password), then invite people by handle, message friends, and answer release requests. One-way or mutual. They see only: prompts you sent despite a warning (with their text), session times, daily counts, and when the app last checked in. Never your syllabi, assignments, or the text of clean or flagged messages. Turn "Share my activity" off at any time.
 - **Settings** — the AI's status, your guarded browser and its extension, an optional accountability PIN (a friend sets it, then ending a session, deleting a class or clearing the log needs it), and permissions.
 
 ## Your guarded browser (and the extension)
@@ -68,17 +68,26 @@ Some AI websites hide their send button from macOS, and only the page itself can
 
 Set it up in the first-run flow or in **Settings › Guarded browser**. After updating the app, refresh the extension in your browser and reload your AI tabs.
 
-## Staying locked in
+## Timed lock-in
 
-Proctoring tools do this in two ways: Respondus LockDown Browser replaces your browser with a kiosk that takes over the screen, and Honorlock is an extension plus webcam and screen recording that flags tab switches for a human to review. Neither is unbreakable on a computer you control, and both are heavier than HonestHands needs.
+Pick a duration when you start a session (15 min, 30 min, 1 hour, 2 hours, or your own number of minutes). For that long you are **locked in**:
 
-Instead, while a study session is on, HonestHands notices when another app comes to the front. If it's on your block list, the app is hidden and you're put back where you were, with a short note. By default that covers **other browsers** (only your guarded browser stays available); you can also block **AI desktop apps** (Claude, ChatGPT and similar). Each time it turns you back it's noted in your Activity. Set it in **Settings › Stay locked in**.
+- **You can't quit.** Closing the window just tucks it away, Quit asks "Need out?", and if the app is force-quit a tiny watcher that macOS keeps alive relaunches it right away. The watcher installs only for the length of a lock-in (no admin password) and removes itself when it ends.
+- **It ends by itself** when the time is up, with a notification.
+- **There are exactly two ways out early:** your **accountability PIN**, or a **friend releasing you**. From the countdown screen tap **Need out?**, then enter the PIN or ask a friend (with an optional note about why). Your friend sees a release request in the Community tab and in a notification, and chooses *Release them* or *Not now*. Their decision is final, and only a request made during this lock-in counts.
+- **You can't start a timed lock without a way out**, so nobody can trap themselves: set a PIN in Settings, or invite a friend who can see you (Community).
 
-It's a speed bump for the moment of temptation, not a cage: you can still quit HonestHands. An accountability PIN makes ending a session or quitting need someone else.
+While locked in, HonestHands also notices when another app comes to the front. If it's on your block list it is hidden and you're put back where you were, with a short note. By default that covers **other browsers** (only your guarded browser stays available); you can also block **AI desktop apps**. Set it in **Settings › Stay locked in**.
+
+It's honest about its limits: on a Mac you own, a determined person can still unload the watcher from Terminal. The PIN and your friends are the real accountability. When run from source (`python3 main.py`) a relaunched app may need Accessibility granted to the Python binary; the packaged app doesn't have that problem.
+
+## Messages
+
+Once you're connected to a friend (one of you can see the other), you can message each other from the **Community** tab. New messages and release requests show as a number on the sidebar, and as macOS notifications while the app is running.
 
 ## Community setup (Supabase)
 
-Accounts, partners and the feed use a Supabase project. The database layout and the access rules are in `cloud/schema.sql`; the one-time setup steps are in `cloud/README.md`. In short: run `schema.sql`, turn off "Confirm email", and put the project URL and the public anon key in `cloud.py` (or the `HH_SUPABASE_URL` / `HH_SUPABASE_ANON` environment variables). Never put the `service_role` key anywhere in this repo.
+Accounts, partners and the feed use a Supabase project. The database layout and the access rules are in `cloud/schema.sql`; the one-time setup steps are in `cloud/README.md`. In short: run `schema.sql` (and, if your project already had the first version, `cloud/migrations/002_messages_and_releases.sql` for messages and release requests), turn off "Confirm email", and put the project URL and the public anon key in `cloud.py` (or the `HH_SUPABASE_URL` / `HH_SUPABASE_ANON` environment variables). Never put the `service_role` key anywhere in this repo.
 
 ## Tests
 
@@ -88,6 +97,8 @@ python3 tests/test_homework.py     # finding which homework question a message r
 python3 tests/test_images.py       # pictures read on-device and judged
 python3 tests/test_browser_block.py # AI sites are blocked in every browser except the guarded one
 python3 tests/test_lock.py         # the app lock (add --live to check the real macOS notification)
+python3 tests/test_timed_lock.py   # timed lock-in rules: needs a way out, PIN or friend to leave, ends by itself
+python3 tests/test_keepalive.py    # the watcher that relaunches the app, with a stand-in program
 python3 tests/test_cloud_mock.py   # accounts, partners, sync, against an in-memory stand-in for Supabase
 ```
 
@@ -119,6 +130,7 @@ When the guard gets something wrong, paste the exact message into `tests/guard_c
 | `engine.py` | The on-device AI model |
 | `browsers.py`, `extensions.py` | The supported browsers; building the extension for each |
 | `lock.py` | Turns you back from blocked apps during a session |
+| `watchdog.py`, `keepalive.py` | Keeps the app running during a timed lock-in |
 | `homework.py` | Finds which homework question a message resembles |
 | `ocr.py` | Reads text in pictures (Apple Vision) |
 | `distill.py`, `docs.py`, `rules.py` | Pulling the AI rules out of a syllabus; keyword fallback |

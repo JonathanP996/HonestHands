@@ -9,12 +9,21 @@ function fmtDur(sec){ sec=Math.max(0,sec|0); const h=Math.floor(sec/3600), m=Mat
 function fmtLong(sec){ sec=Math.max(0,sec|0); const h=Math.floor(sec/3600), m=Math.round(sec%3600/60);
   return h>0 ? (h+'h '+m+'m') : (m+'m'); }
 let TIMER = null, TIMER_BASE = 0, TIMER_T0 = 0;
-function startTimerTick(startedEpoch){
+function startTimerTick(startedEpoch, endsEpoch){
   stopTimerTick();
+  let done = false;
   TIMER = setInterval(()=>{ const el=document.getElementById('sessTimer');
     if(!el){ return; }
-    const sec = Math.floor(Date.now()/1000 - startedEpoch);
-    el.textContent = fmtDur(sec);
+    const now = Date.now()/1000;
+    if (endsEpoch) {                                   // a timed lock-in: count down
+      const left = Math.max(0, Math.ceil(endsEpoch - now));
+      el.textContent = fmtDur(left);
+      const f = document.getElementById('sb-prog-fill');
+      if (f) f.style.width = Math.min(100, 100 * (now - startedEpoch) / Math.max(1, endsEpoch - startedEpoch)) + '%';
+      if (left <= 0 && !done) { done = true; setTimeout(refresh, 2500); }       // the app ends it by itself; pick that up
+    } else {
+      el.textContent = fmtDur(Math.floor(now - startedEpoch));
+    }
   }, 1000);
 }
 function stopTimerTick(){ if(TIMER){ clearInterval(TIMER); TIMER=null; } }
@@ -50,6 +59,17 @@ function fitRail() {
   document.documentElement.style.setProperty('--rv', rv.toFixed(3));
 }
 window.addEventListener('resize', fitRail); fitRail();
+
+// A small dot on Community when a friend has messaged you or is asking you to release them.
+function paintBadge() {
+  const btn = document.querySelector('.railbtn[data-tab="community"]');
+  if (!btn) return;
+  const ib = (S && S.inbox) || {}, n = (ib.unread || 0) + (ib.requests || 0);
+  let b = btn.querySelector('.rbadge');
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('i'); b.className = 'rbadge'; btn.querySelector('.ico').appendChild(b); }
+  b.textContent = n > 9 ? '9+' : n;
+}
 
 // ---- sidebar greeting (signed-in users) ----
 function paintWelcome() {
@@ -90,7 +110,7 @@ function paint() {
   const rail = document.getElementById('rail');
   if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.visibility='hidden'; paintOnboarding(); return; }
   rail.style.visibility = 'visible'; document.getElementById('topbar').style.visibility='visible';
-  paintWelcome();
+  paintWelcome(); paintBadge();
   document.querySelectorAll('#rail .railbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === TAB));
   const meta = TAB_META[TAB] || TAB_META.home;
   const sess = S.session;
@@ -143,8 +163,10 @@ function paintHome() {
         <div class="sb-mid">
           <h1 class="sb-class sb-in" style="--i:1">${h(sess.class)}</h1>
           ${sess.assignment ? `<div class="sb-asg sb-in" style="--i:2">${h(sess.assignment)}</div>` : ''}
-          <div class="sb-timer-lab sb-in" style="--i:3">Locked in for</div>
-          <div class="sb-timer sb-in" style="--i:4" id="sessTimer">${fmtDur(sess.elapsed||0)}</div>
+          <div class="sb-timer-lab sb-in" style="--i:3">${sess.locked ? 'Time left' : 'Locked in for'}</div>
+          <div class="sb-timer sb-in" style="--i:4" id="sessTimer">${sess.locked ? fmtDur(Math.max(0, Math.ceil(sess.ends_at - Date.now()/1000))) : fmtDur(sess.elapsed||0)}</div>
+          ${sess.locked ? `<div class="sb-prog sb-in" style="--i:4"><i id="sb-prog-fill" style="width:${Math.min(100, 100 * (Date.now()/1000 - sess.started) / Math.max(1, sess.ends_at - sess.started))}%"></i></div>
+            <div class="sb-until sb-in" style="--i:4">Locked in until ${fmtClock(sess.ends_at)}</div>` : ''}
         </div>
         <div class="sb-bot sb-in" style="--i:5">
           <div class="sb-stats">
@@ -152,7 +174,7 @@ function paintHome() {
             <div><b id="sb-n-flag">0</b><span>flagged</span></div>
             <div class="bad"><b id="sb-n-over">0</b><span>overridden</span></div>
           </div>
-          <button class="btn ghost" id="end">End session</button>
+          <button class="btn ghost" id="end">${sess.locked ? 'Need out?' : 'End session'}</button>
         </div>
       </div>
       <p class="small muted center" style="margin-top:14px">Use your AI apps and sites as normal. Each message is checked the moment before it sends.</p></div>`;
@@ -165,13 +187,14 @@ function paintHome() {
       S = ns; const t = ns.session.stats || {};
       countTo($('#sb-n-today'), t.clean || 0, { dur: 600 }); countTo($('#sb-n-flag'), t.flagged || 0, { dur: 600 }); countTo($('#sb-n-over'), t.overridden || 0, { dur: 600 });
     }, 3000);
-    startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)));
+    startTimerTick(sess.started || (Date.now()/1000 - (sess.elapsed||0)), sess.locked ? sess.ends_at : 0);
+    if (sess.locked) { $('#end').onclick = openNeedOut; return; }
     $('#end').onclick = async () => { const pin = await askPin('Enter the PIN to end this session.'); if (pin === null) return;
       const r = await api().end_session(pin || ''); if (r.error) toast(r.error); else refresh(); };
     return;
   }
   const TUTOR = S.tutor_mode, ALL = [TUTOR, ...S.classes];
-  let selC = (S.classes[0] || TUTOR).id, selA = '';
+  let selC = (S.classes[0] || TUTOR).id, selA = '', selMin = 0, customMin = 30;
   m.innerHTML = `<div class="wrap sess">${permBanner()}${engineBanner()}
     <div class="sess-hero"><div><h1>Start a study session</h1>
       <p class="sub" style="margin:6px 0 0">Pick what you're working on. The guard stays idle until you do.</p></div></div>
@@ -179,6 +202,9 @@ function paintHome() {
     <div class="classgrid" id="cg"></div>
     <div id="asgstep"><div class="step"><span class="n">2</span>Which assignment?</div>
     <div class="seg" id="ag"></div></div>
+    <div class="step"><span class="n">${'3'}</span>How long?</div>
+    <div class="seg dur" id="dur"></div>
+    <div id="durnote"></div>
     ${S.classes.length ? '' : `<p class="small muted" style="margin-top:18px">Want your own syllabus rules? <a href="#" onclick="TAB='classes';paint();return false">Add a class</a> any time.</p>`}
     <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
   const cls = () => ALL.find(x => x.id === selC);
@@ -196,11 +222,30 @@ function paintHome() {
     m.querySelectorAll('.pick').forEach(b => b.onclick = () => { selC = b.dataset.c; paintPicks(); });
     m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
   };
-  paintPicks();
+  const DURS = [[0, 'No timer'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [120, '2 hours'], [-1, 'Custom']];
+  const minutes = () => selMin === -1 ? Math.max(1, Math.min(720, Math.round(+customMin) || 1)) : selMin;
+  const paintDur = () => {
+    $('#dur').innerHTML = DURS.map(([v, l]) => `<button class="${selMin === v ? 'on' : ''}" data-d="${v}">${l}</button>`).join('') +
+      (selMin === -1 ? `<span class="durcustom"><input id="cmin" type="number" min="1" max="720" value="${customMin}"><span>minutes</span></span>` : '');
+    const mins = minutes(), ex = S.exit || { pin: false, friends: 0 }, can = ex.pin || ex.friends > 0;
+    const until = new Date(Date.now() + mins * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    $('#durnote').innerHTML = !mins ? `<p class="small muted" style="margin-top:12px">No timer: you can end the session whenever you like${ex.pin ? ' (with your PIN)' : ''}.</p>`
+      : `<div class="lockbox ${can ? '' : 'warn'}"><b>Locked in until ${until}.</b>
+          <span>You won't be able to quit or end it early. The only ways out: ${ex.pin ? 'your <b>PIN</b>' : ''}${ex.pin && ex.friends ? ' or ' : ''}${ex.friends ? `a <b>friend</b> releasing you (${ex.friends} can)` : ''}${can ? '.' : ''}</span>
+          ${can ? '' : `<span>You don't have a way out yet, and a timed lock needs one for emergencies.</span><div class="btnrow" style="margin-top:8px">
+            <button class="btn ghost sm" id="lk-pin">Set a PIN</button><button class="btn ghost sm" id="lk-friend">Invite a friend</button></div>`}</div>`;
+    $('#go').disabled = !!mins && !can;
+    $('#go').textContent = mins ? `Lock in for ${mins >= 60 && mins % 60 === 0 ? mins / 60 + ' hour' + (mins > 60 ? 's' : '') : mins + ' min'}` : 'Start session';
+    m.querySelectorAll('#dur button').forEach(b => b.onclick = () => { selMin = +b.dataset.d; paintDur(); });
+    if ($('#cmin')) $('#cmin').oninput = (e) => { customMin = e.target.value; const mm = minutes(); $('#go').textContent = `Lock in for ${mm} min`; };
+    if ($('#lk-pin')) $('#lk-pin').onclick = () => { TAB = 'settings'; paint(); };
+    if ($('#lk-friend')) $('#lk-friend').onclick = () => { TAB = 'community'; paint(); };
+  };
+  paintPicks(); paintDur();
   $('#go').onclick = async () => {
-    const pick = m.querySelector('.pick.on');
-    if (pick && !reduceMotion()) return morphStart(pick, api().start_session(selC, selA, 'warn'));
-    const r = await api().start_session(selC, selA, 'warn');
+    const pick = m.querySelector('.pick.on'), mins = minutes();
+    if (pick && !reduceMotion()) return morphStart(pick, api().start_session(selC, selA, 'warn', mins));
+    const r = await api().start_session(selC, selA, 'warn', mins);
     if (r.error) toast(r.error); else { TAB = 'home'; refresh(); }
   };
 }
@@ -432,7 +477,7 @@ window.addEventListener('pywebviewready', async () => {
         return;
       }
       if (JSON.stringify(ns.engine) + ns.perms.watching + ns.perms.accessibility + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
-      else { S = ns; if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
+      else { S = ns; paintBadge(); if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
         const box=$('#eprog'); if(box) box.innerHTML=`<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}%</div>`; } }
     } catch (_) {}
   }, 1500);
