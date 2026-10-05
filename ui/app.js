@@ -472,7 +472,7 @@ function paintSettings() {
     <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my Mac” follows your system setting.</p>
       <div class="segmode themeseg" id="themeseg">${[['system', 'Match my Mac'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     </div>
-    <div class="card"><h2>The AI</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
+    <div class="card"><h2>The Guard</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
       <div class="btnrow"><span class="chip ${e.ready ? 'good' : 'warn'}"><span class="d"></span>${e.ready ? 'Ready' : h(e.message || 'Not set up yet')}</span>
         ${e.ready ? '' : `<button class="btn" id="apply">${e.state === 'error' ? 'Try again' : 'Download &amp; set up'}</button>`}</div>
       <div id="eprog"></div>
