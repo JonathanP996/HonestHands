@@ -530,6 +530,21 @@ def remember_typed():
         pass
 
 
+def diag(msg):
+    """Always-on, tiny log of why a keypress or click was held (guard.log in the app's data folder), so 'Enter does nothing'
+    can be diagnosed afterwards. Keeps only the last ~100 KB."""
+    try:
+        from store import APP_DIR
+        f = APP_DIR / 'guard.log'
+        line = time.strftime('%H:%M:%S ') + msg + '\n'
+        if f.exists() and f.stat().st_size > 100_000:
+            f.write_text(f.read_text()[-40_000:])
+        with open(f, 'a') as fh:
+            fh.write(line)
+    except Exception:
+        pass
+
+
 def notify(title, message, action=''):
     """A macOS alert. Sent as HonestHands itself when running as the installed app; action ('messages', 'community'...) is
     the tab to open when it's clicked."""
@@ -662,6 +677,8 @@ class Guard:
                 dbg('ENTER seen, keycode', kc, '- intercepting')
                 allow = self.intercept('enter', None, cls, asg)
                 dbg('ENTER decision:', 'ALLOW/through' if allow else 'HELD')
+                if not allow:
+                    diag('Enter held: %s' % getattr(self, '_why', 'a warning is showing'))
                 return event if allow else None
             if etype == kCGEventLeftMouseDown:
                 is_send = self.click_is_send(event)
@@ -670,6 +687,8 @@ class Guard:
                     pt = CGEventGetLocation(event)
                     allow = self.intercept('click', (pt.x, pt.y), cls, asg)
                     dbg('CLICK decision:', 'ALLOW/through' if allow else 'HELD')
+                    if not allow:
+                        diag('Send click held: %s' % getattr(self, '_why', 'a warning is showing'))
                     return event if allow else None
         except Exception as e:  # never freeze the keyboard over a bug
             print(f'guard error, letting it through: {e}')
@@ -678,11 +697,18 @@ class Guard:
     def intercept(self, trigger, loc, cls, asg):
         """True = let it through now. False = hold it. Locks on the very first event
         so a rapid second click/Enter can't race past before the warning appears."""
-        # If anything is already being held, swallow this immediately.
+        # If anything is already being held, swallow this immediately... unless that hold is stale (nothing on screen and
+        # nothing running for a long time). A stuck hold would make Enter do nothing everywhere, so let go of it.
+        hook = Guard.overlay_hook
+        if (self.locked or self._entry.locked()) and time.time() - getattr(self, '_t_start', 0) > 15 and not (hook is not None and hook.is_open()):
+            diag('released a stale hold (%ds old)' % int(time.time() - self._t_start))
+            self._release()
         if self.locked:
+            self._why = 'another check is still running'
             return False
         # Grab the decision lock without blocking the tap thread; if we can't, hold.
         if not self._entry.acquire(blocking=False):
+            self._why = 'decision lock busy'
             return False
         self.locked = True
         self._held = (trigger, loc)
@@ -709,6 +735,7 @@ class Guard:
                 r = {'level': 'flag', 'hard': True, 'verdict': 'block', 'reason': msg, 'rule': 'Use your guarded browser', 'quote': '',
                      'tip': f'Open this chat in {nm}.', 'reasons': [msg], 'source': 'browser'}
                 dbg('intercept: wrong browser', p.get('bid'), '-> BLOCK (guarded browser is', chosen + ')')
+                self._why = 'wrong browser (%s) on %s' % (p.get('bid'), p.get('where'))
                 self.record(p, cls, asg, trigger, 'warned', r)
                 AppHelper.callAfter(self.show_warning, r, True, p, cls, asg)
                 return False
@@ -717,8 +744,12 @@ class Guard:
                 r = self.ai_guard.check(p['text'], cls, asg, p['where'])  # no AI, instant
             if r is not None:
                 dbg('intercept: cached/instant verdict =', r.get('verdict'), 'level=', r.get('level'))
-                return self.act(r, p, cls, asg, trigger)  # releases on allow; stays locked on flag
+                res = self.act(r, p, cls, asg, trigger)  # releases on allow; stays locked on flag
+                if not res:
+                    self._why = 'warning shown (%s) on %s' % (r.get('verdict'), p.get('where'))
+                return res
             dbg('intercept: no cached verdict -> async AI guard, HOLDING')
+            self._why = 'checking with the AI on %s' % p.get('where')
             self._show_checking()
 
             # Need the AI. Stay locked, guard in the background, decide in _finish.
