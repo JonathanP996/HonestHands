@@ -18,6 +18,7 @@ DEFAULTS = {
     'onboarded': False,
     'cloud': {},
     'lock': {'browsers': True, 'ai_apps': False},   # what to turn you back from while a session is on
+    'theme': 'system',      # system | light | dark
     'browser': '',          # chrome | edge | firefox | safari | '' (not chosen yet)
 }
 

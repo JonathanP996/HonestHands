@@ -52,7 +52,8 @@ This produces **HonestHands.app** and **HonestHands.dmg**. First launch: right-c
 - **History** — your sessions as large blocks, grouped by day. Click one to see every prompt from that session.
 - **Insights** — clean rate, time locked in, where you use AI, a streak calendar, time per class, and your week.
 - **Community** — create an account (email and password), then invite people by handle, message friends, and answer release requests. One-way or mutual. They see only: prompts you sent despite a warning (with their text), session times, daily counts, and when the app last checked in. Never your syllabi, assignments, or the text of clean or flagged messages. Turn "Share my activity" off at any time.
-- **Settings** — the AI's status, your guarded browser and its extension, an optional accountability PIN (a friend sets it, then ending a session, deleting a class or clearing the log needs it), and permissions.
+- **Overridden Feed** — in Community, every prompt the people you watch sent despite a warning. Give each a thumbs up (fine) or thumbs down (not okay), and tap **Let's talk about this** to message them with the prompt already quoted. People can add a note to their own overridden prompts (Activity tab) to explain themselves, and their partners see it in the feed.
+- **Settings** — light or dark (or match your Mac), the AI's status, your guarded browser and its extension, an optional accountability PIN (a friend sets it, then ending a session, deleting a class or clearing the log needs it), and permissions.
 
 ## Your guarded browser (and the extension)
 
@@ -87,7 +88,7 @@ Once you're connected to a friend (one of you can see the other), you can messag
 
 ## Community setup (Supabase)
 
-Accounts, partners and the feed use a Supabase project. The database layout and the access rules are in `cloud/schema.sql`; the one-time setup steps are in `cloud/README.md`. In short: run `schema.sql` (and, if your project already had the first version, `cloud/migrations/002_messages_and_releases.sql` for messages and release requests), turn off "Confirm email", and put the project URL and the public anon key in `cloud.py` (or the `HH_SUPABASE_URL` / `HH_SUPABASE_ANON` environment variables). Never put the `service_role` key anywhere in this repo.
+Accounts, partners and the feed use a Supabase project. The database layout and the access rules are in `cloud/schema.sql`; the one-time setup steps are in `cloud/README.md`. In short: run `schema.sql` (and, if your project already had the first version, `cloud/migrations/002_messages_and_releases.sql` for messages and release requests, and `003_notes_and_reactions.sql` for notes and thumbs on overridden prompts), turn off "Confirm email", and put the project URL and the public anon key in `cloud.py` (or the `HH_SUPABASE_URL` / `HH_SUPABASE_ANON` environment variables). Never put the `service_role` key anywhere in this repo.
 
 ## Tests
 

@@ -130,7 +130,7 @@ function paintCommHome(me) {
       <div class="icard rise" style="--i:3"><div class="ihead"><h2>Watching me</h2><span class="icap" id="mcap"></span></div><div id="watchers"></div></div>
     </div>
     <div class="icard rise" style="--i:4"><div class="ihead"><h2>Messages</h2><span class="icap" id="msgcap"></span></div><div id="convos"></div></div>
-    <div class="icard rise" style="--i:5;margin-top:18px"><div class="ihead"><h2>Overridden prompts</h2><span class="icap">FROM PEOPLE YOU WATCH</span></div><div id="feed"></div></div>
+    <div class="icard rise" style="--i:5;margin-top:18px"><div class="ihead"><h2>Overridden Feed</h2><span class="icap">FROM PEOPLE YOU WATCH</span></div><div id="feed"></div></div>
   </div>`;
   let mode = 'watch_me';
   $('#mode').querySelectorAll('button').forEach(b => b.onclick = () => { mode = b.dataset.m;
@@ -182,13 +182,45 @@ async function refreshComm() {
     || '<p class="muted small">No one can see your activity yet.</p>';
   $('#watchers').querySelectorAll('[data-end]').forEach(b => b.onclick = async () => { const r = await api().cloud_end(b.dataset.end); if (r && r.error) toast(r.error); else { toast('Removed.'); refreshComm(); } });
 
-  $('#feed').innerHTML = ov.feed.length ? ov.feed.map((e, i) => `<div class="fitem" style="--i:${Math.min(i, 10)}">
+  COMM_OV = ov; drawFeed();
+}
+
+// ---------------------------------------------------------------- the Overridden Feed
+let COMM_OV = null;
+const myVerdict = (e) => { const r = (e.reactions || []).find(x => x.reviewer === COMM_OV.me); return r ? r.verdict : ''; };
+function drawFeed() {
+  const ov = COMM_OV, box = document.getElementById('feed'); if (!box) return;
+  box.innerHTML = ov.feed.length ? ov.feed.map((e, i) => {
+    const note = Array.isArray(e.note) ? e.note[0] : e.note, mv = myVerdict(e);
+    return `<div class="fitem" style="--i:${Math.min(i, 10)}">
       ${avatar((e.who || {}).display_name, (e.who || {}).id, 40)}
       <div class="fmain"><div class="fmeta"><b>${h((e.who || {}).display_name || 'Someone')}</b> sent this despite a warning · ${ago(isoSec(e.at))}
         ${e.class_label ? `<span class="muted"> · ${h(e.class_label)}${e.assignment_label ? ' / ' + h(e.assignment_label) : ''}</span>` : ''}${e.site ? `<span class="muted"> · ${h(e.site)}</span>` : ''}</div>
         <div class="fquote">“${h(e.prompt_text)}”</div>
-        ${e.reason ? `<div class="fwhy">${h(e.reason)}</div>` : ''}</div></div>`).join('')
+        ${e.reason ? `<div class="fwhy">${h(e.reason)}</div>` : ''}
+        ${note && note.body ? `<div class="fnote"><b>${h((e.who || {}).display_name || 'They')} says</b>${h(note.body)}</div>` : ''}
+        <div class="fact">
+          <button class="thumb up ${mv === 'up' ? 'on' : ''}" data-ev="${e.id}" data-v="up" title="This looks fine to me">${THUMB_UP}<span>Fine</span></button>
+          <button class="thumb down ${mv === 'down' ? 'on' : ''}" data-ev="${e.id}" data-v="down" title="This doesn’t look right">${THUMB_DOWN}<span>Not okay</span></button>
+          <button class="btn ghost sm" data-talk="${i}">Let’s talk about this</button>
+        </div></div></div>`;
+  }).join('')
     : `<div class="emptyfeed"><b>Nothing overridden.</b><span>${ov.watching.length ? 'A quiet feed is a good feed.' : 'Prompts people send despite a warning will show up here.'}</span></div>`;
+  box.querySelectorAll('[data-v]').forEach(b => b.onclick = async () => {
+    const e = ov.feed.find(x => x.id === b.dataset.ev); if (!e) return;
+    const verdict = myVerdict(e) === b.dataset.v ? '' : b.dataset.v;               // tapping your choice again takes it back
+    const before = e.reactions || [];
+    e.reactions = before.filter(r => r.reviewer !== ov.me).concat(verdict ? [{ reviewer: ov.me, verdict }] : []);
+    drawFeed();
+    const r = await api().cloud_react(e.id, verdict);
+    if (r && r.error) { e.reactions = before; drawFeed(); toast(/reactions|schema|exist/i.test(r.error) ? 'Thumbs need a one-time database update (cloud/migrations/003_notes_and_reactions.sql).' : r.error); }
+  });
+  box.querySelectorAll('[data-talk]').forEach(b => b.onclick = () => {
+    const e = ov.feed[+b.dataset.talk], who = e.who || {};
+    const person = (ov.watching.find(w => w.person.id === who.id) || {}).person || who;
+    const q = (e.prompt_text || '').slice(0, 500);
+    openChat(person, `Let’s talk about this one:\n“${q}”${e.class_label ? `\n(${e.class_label}${e.site ? ', ' + e.site : ''})` : ''}\n\n`);
+  });
 }
 
 // ---------------------------------------------------------------- one person
@@ -247,8 +279,11 @@ function drawConvos(rows) {
   $('#convos').querySelectorAll('[data-chat]').forEach(b => b.onclick = () => openChat(rows.find(r => r.person.id === b.dataset.chat).person));
 }
 
+const THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3z"/><path d="M7 11l4-8c1.7 0 3 1.3 3 3v3.5h5a2 2 0 0 1 2 2.3l-1.2 7a2 2 0 0 1-2 1.7H7"/></svg>';
+const THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3z"/><path d="M7 11l4-8c1.7 0 3 1.3 3 3v3.5h5a2 2 0 0 1 2 2.3l-1.2 7a2 2 0 0 1-2 1.7H7"/></svg>';
+
 let CHAT_TIMER = null;
-async function openChat(person) {
+async function openChat(person, draft = '') {
   clearInterval(CHAT_TIMER);
   const node = el(`<div class="chat"><div class="chathead">${avatar(person.display_name, person.id, 44)}<div><h2>${h(person.display_name)}</h2><span class="muted small">@${h(person.handle || '')}</span></div></div>
     <div class="chatlist" id="chatlist"><p class="muted small">Loading…</p></div>
@@ -275,6 +310,7 @@ async function openChat(person) {
   };
   $('#chatsend').onclick = send;
   $('#chatin').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-  await load(true); $('#chatin').focus();
+  if (draft) { $('#chatin').value = draft; $('#chatin').rows = 3; }
+  await load(true); $('#chatin').focus(); $('#chatin').setSelectionRange($('#chatin').value.length, $('#chatin').value.length);
   CHAT_TIMER = setInterval(() => load(false), 4000);
 }

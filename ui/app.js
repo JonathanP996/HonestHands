@@ -107,6 +107,7 @@ function extChipHTML() {
 }
 function paint() {
   stopTimerTick();
+  if (S) applyTheme(S.theme);
   const rail = document.getElementById('rail');
   if (S && !S.onboarded) { rail.style.display = 'none'; document.getElementById('topbar').style.display='none'; paintOnboarding(); return; }
   rail.style.display = ''; document.getElementById('topbar').style.display='';
@@ -382,7 +383,7 @@ async function paintLog() {
     <div class="card" id="loglist"><p class="muted">Loading…</p></div></div>`;
   const pg = await api().get_log_page(LOGPAGE, 25, LOGKIND);
   LOGPAGE = pg.page;
-  const rows = pg.rows.map(e => {
+  const rows = pg.rows.map((e, idx) => {
     const when = new Date(e.t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     if (e.event) return `<div class="logline"><span class="when">${when}</span><div class="txt muted">— ${h(e.event)}: ${h(e.class||'')} ${h(e.assignment||'')}</div></div>`;
     const over = e.result === 'sent anyway' || e.result === 'sent after warning';
@@ -391,7 +392,8 @@ async function paintLog() {
     return `<div class="logline"><span class="when">${when}</span><span class="dot ${ok?'':over?'bad':'warn'}"></span>
       <div class="txt"><b>${h(label)}</b> · ${h(e.where||'')} · ${h(e.class||'')} ${e.assignment?'/ '+h(e.assignment):''}
       ${e.source?`<span class="small muted">(${e.source==='ai'?'AI':'keywords'})</span>`:''}
-      <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}</div></div>`;
+      <div class="q small">“${h(e.text||'')}”</div>${e.reasons?`<div class="small muted">${e.reasons.map(h).join(' ')}</div>`:''}
+      ${over && S.cloud_user && S.cloud_user.signed_in ? `<div class="lfb" data-i="${idx}"></div>` : ''}</div></div>`;
   }).join('');
   const FILTERS = [['all', 'All', ''], ['flagged', 'Flagged', 'warn'], ['overridden', 'Overridden', 'bad'], ['clean', 'Clean', 'ok']];
   $('#logfilters').innerHTML = FILTERS.map(([k, label, cls]) => `<button class="fchip ${LOGKIND === k ? 'on' : ''}" data-k="${k}">
@@ -409,16 +411,54 @@ async function paintLog() {
   };
   $('#loglist').innerHTML = (rows || (LOGKIND === 'all' ? '<p class="muted">Nothing yet. Start a session and use AI, and it\'ll show up here.</p>' : '<p class="muted">Nothing in this category.</p>')) + pager();
   $('#loglist').querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { LOGPAGE = +b.dataset.pg; paintLog(); $('#main').scrollTop = 0; });
+  drawLogFeedback(pg.rows);
   $('#exp').onclick = async () => { const p = await api().export_log(); if (p) toast('Saved to ' + p.split('/').pop()); };
   $('#clr').onclick = async () => { const pin = await askPin('Enter the PIN to clear the log.'); if (pin === null) return;
     const r = await api().clear_log(pin || ''); if (r && r.error) toast(r.error); else { LOGPAGE = 1; paintLog(); } };
 }
 
 
+// Notes you leave on your own overridden prompts, and what your partners made of them.
+async function drawLogFeedback(rows) {
+  const boxes = [...document.querySelectorAll('.lfb')]; if (!boxes.length) return;
+  const idx = boxes.map(b => +b.dataset.i), pairs = idx.map(i => [rows[i].t, rows[i].text || '']);
+  const fb = await api().cloud_feedback(pairs);
+  const list = Array.isArray(fb) ? fb : [];
+  boxes.forEach((box, k) => paintLfb(box, rows[idx[k]], list[k] || { note: '', reactions: [] }));
+}
+function paintLfb(box, row, f) {
+  const chips = (f.reactions || []).map(r => `<span class="rchip ${r.verdict}">${r.verdict === 'up' ? THUMB_UP : THUMB_DOWN}${h(r.name)}</span>`).join('');
+  box.innerHTML = `${f.note ? `<div class="mynote"><b>Your note</b>${h(f.note)}</div>` : ''}
+    <div class="lfrow">${chips}<button class="linkbtn" data-edit>${f.note ? 'Edit your note' : 'Add a note for your partners'}</button></div>`;
+  box.querySelector('[data-edit]').onclick = () => {
+    box.innerHTML = `<textarea class="lfta" rows="3" maxlength="1000" placeholder="Explain what happened (for example, the AI got this wrong). Your partners see this next to the prompt."></textarea>
+      <div class="lfrow"><button class="btn sm" data-save>Save note</button><button class="btn ghost sm" data-cancel>Cancel</button>${f.note ? '<button class="linkbtn" data-del>Remove note</button>' : ''}</div>`;
+    const ta = box.querySelector('textarea'); ta.value = f.note || ''; ta.focus();
+    const save = async (body) => {
+      const r = await api().cloud_set_note(row.t, row.text || '', body);
+      if (r && r.error) return toast(r.error);
+      toast(body ? 'Note saved. Your partners can see it.' : 'Note removed.');
+      paintLfb(box, row, Object.assign({}, f, { note: body }));
+    };
+    box.querySelector('[data-save]').onclick = () => save(ta.value.trim());
+    box.querySelector('[data-cancel]').onclick = () => paintLfb(box, row, f);
+    const del = box.querySelector('[data-del]'); if (del) del.onclick = () => save('');
+  };
+}
+
+// ---- Appearance: follows the system unless the person picks light or dark ----
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode); else root.removeAttribute('data-theme');
+}
+
 // ---- Settings ----
 function paintSettings() {
   const m = $('#main'); const e = S.engine;
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
+    <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my Mac” follows your system setting.</p>
+      <div class="segmode themeseg" id="themeseg">${[['system', 'Match my Mac'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    </div>
     <div class="card"><h2>The AI</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
       <div class="btnrow"><span class="chip ${e.ready ? 'good' : 'warn'}"><span class="d"></span>${e.ready ? 'Ready' : h(e.message || 'Not set up yet')}</span>
         ${e.ready ? '' : `<button class="btn" id="apply">${e.state === 'error' ? 'Try again' : 'Download &amp; set up'}</button>`}</div>
@@ -461,6 +501,10 @@ function paintSettings() {
     if (r.error) toast(r.error); else { S = r; toast('PIN removed.'); paint(); } };
   $('#pinbtn').onclick = async () => { const r = await api().set_pin($('#op')?.value || '', $('#np').value);
     if (r.error) toast(r.error); else { S = r; toast('PIN updated.'); paint(); } };
+  $('#themeseg').querySelectorAll('button').forEach(b => b.onclick = async () => {
+    const r = await api().set_theme(b.dataset.th); if (r && !r.error) { S = r; applyTheme(S.theme); }
+    $('#themeseg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  });
   $('#acc').onclick = () => api().open_accessibility_settings();
   $('#data').onclick = () => api().open_data_folder();
 }

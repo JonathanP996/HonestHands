@@ -263,3 +263,40 @@ begin
   begin alter publication supabase_realtime add table public.messages; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.unlock_requests; exception when duplicate_object then null; end;
 end $$;
+
+-- ------------------------------------------------------- notes and thumbs on overridden prompts (migration 003)
+create table if not exists public.event_notes (
+  event_id   uuid primary key references public.events(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  body       text not null check (char_length(body) between 1 and 1000),
+  updated_at timestamptz not null default now()
+);
+alter table public.event_notes enable row level security;
+drop policy if exists notes_read   on public.event_notes;
+drop policy if exists notes_write  on public.event_notes;
+drop policy if exists notes_update on public.event_notes;
+drop policy if exists notes_delete on public.event_notes;
+create policy notes_read   on public.event_notes for select using (public.can_see(user_id));
+create policy notes_write  on public.event_notes for insert with check (
+  user_id = auth.uid() and exists (select 1 from public.events e where e.id = event_id and e.user_id = auth.uid()));
+create policy notes_update on public.event_notes for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy notes_delete on public.event_notes for delete using (user_id = auth.uid());
+
+create table if not exists public.reactions (
+  event_id   uuid not null references public.events(id) on delete cascade,
+  reviewer   uuid not null references public.profiles(id) on delete cascade,
+  verdict    text not null check (verdict in ('up', 'down')),
+  updated_at timestamptz not null default now(),
+  primary key (event_id, reviewer)
+);
+alter table public.reactions enable row level security;
+drop policy if exists reactions_read   on public.reactions;
+drop policy if exists reactions_write  on public.reactions;
+drop policy if exists reactions_update on public.reactions;
+drop policy if exists reactions_delete on public.reactions;
+create policy reactions_read on public.reactions for select using (
+  reviewer = auth.uid() or exists (select 1 from public.events e where e.id = event_id and e.user_id = auth.uid()));
+create policy reactions_write on public.reactions for insert with check (
+  reviewer = auth.uid() and exists (select 1 from public.events e where e.id = event_id and public.is_watcher(e.user_id, auth.uid())));
+create policy reactions_update on public.reactions for update using (reviewer = auth.uid()) with check (reviewer = auth.uid());
+create policy reactions_delete on public.reactions for delete using (reviewer = auth.uid());

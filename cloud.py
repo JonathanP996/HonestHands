@@ -320,11 +320,15 @@ class Cloud:
                 w['days'] += 1 if d['sessions'] else 0
                 if d['day'] == datetime.now().date().isoformat():
                     w['today_seconds'] = d['seconds']
-            feed = self._rest('GET', f'events?user_id=in.({lst})&select=*,who:profiles!events_user_id_fkey({PROFILE_COLS})&order=at.desc&limit=40')
+            base = f'events?user_id=in.({lst})&select=*,who:profiles!events_user_id_fkey({PROFILE_COLS})'
+            try:
+                feed = self._rest('GET', base.replace('select=*,', 'select=*,note:event_notes(body,updated_at),reactions(reviewer,verdict),') + '&order=at.desc&limit=40')
+            except CloudError:                           # migration 003 not run yet: still show the plain feed
+                feed = self._rest('GET', base + '&order=at.desc&limit=40')
         for w in watching:
             w['week'] = week.get(w['person']['id'], {'seconds': 0, 'overridden': 0, 'flagged': 0, 'clean': 0, 'days': 0, 'today_seconds': 0})
         return {'me': me, 'watching': watching, 'watchers': watchers, 'requests': requests, 'outgoing': outgoing,
-                'feed': feed, 'status': self.status, 'server_time': time.time()}
+                'feed': feed, 'me': uid, 'status': self.status, 'server_time': time.time()}
 
     def friend(self, user_id):
         """Everything a watcher may see about one person (the database enforces who that is)."""
@@ -499,6 +503,55 @@ class Cloud:
         if rows:
             name = (rows[0].get('w') or {}).get('display_name') or 'A friend'
             self.app.release_session(f'{name} released you')
+
+    # ------------------------------------------------- notes and thumbs on overridden prompts
+    def react(self, event_id, verdict):
+        """A thumbs up / down ('up' | 'down') on a friend's overridden prompt; '' takes it back."""
+        if verdict in ('up', 'down'):
+            self._rest('POST', 'reactions?on_conflict=event_id,reviewer',
+                       {'event_id': event_id, 'reviewer': self.uid, 'verdict': verdict, 'updated_at': iso(time.time())},
+                       prefer='resolution=merge-duplicates,return=minimal')
+        else:
+            self._rest('DELETE', f'reactions?event_id=eq.{event_id}&reviewer=eq.{self.uid}', prefer='return=minimal')
+        return True
+
+    def set_note(self, t, text, body):
+        """Your explanation for one of your own overridden prompts, visible to the people who watch you."""
+        eid = self._eid(t, text)
+        body = (body or '').strip()[:1000]
+        try:
+            if not body:
+                self._rest('DELETE', f'event_notes?event_id=eq.{eid}', prefer='return=minimal')
+                return True
+            self.sync_now()                              # the prompt has to be uploaded before a note can point at it
+            self._rest('POST', 'event_notes?on_conflict=event_id',
+                       {'event_id': eid, 'user_id': self.uid, 'body': body, 'updated_at': iso(time.time())},
+                       prefer='resolution=merge-duplicates,return=minimal')
+        except CloudError as e:
+            m = str(e)
+            if 'event_notes' in m or 'does not exist' in m or 'schema cache' in m:
+                raise CloudError('Notes need a one-time database update (cloud/migrations/003_notes_and_reactions.sql).')
+            if 'foreign key' in m or 'violates' in m:
+                raise CloudError('That prompt hasn\'t been shared yet. Turn on "Share my activity" in Community and try again.')
+            raise
+        return True
+
+    def feedback(self, pairs):
+        """For my own overridden prompts [[t, text], ...]: my note and what my watchers said, in the same order."""
+        eids = [self._eid(t, text) for t, text in pairs]
+        if not eids:
+            return []
+        lst = ','.join(eids)
+        try:
+            notes = {n['event_id']: n['body'] for n in self._rest('GET', f'event_notes?event_id=in.({lst})&select=event_id,body')}
+            reacts = self._rest('GET', f'reactions?event_id=in.({lst})&select=event_id,verdict,updated_at,who:profiles!reactions_reviewer_fkey(display_name)')
+        except CloudError:
+            return [{'eid': e, 'note': '', 'reactions': []} for e in eids]
+        out = []
+        for e in eids:
+            out.append({'eid': e, 'note': notes.get(e, ''),
+                        'reactions': [{'name': (r.get('who') or {}).get('display_name') or 'A friend', 'verdict': r['verdict']} for r in reacts if r['event_id'] == e]})
+        return out
 
     def _eid(self, t, text):
         return str(uuid.uuid5(NS, f'{self.uid}|{t:.3f}|{hashlib.sha1((text or "").encode()).hexdigest()}'))

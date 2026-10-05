@@ -114,6 +114,7 @@ class Api:
             'has_pin': bool(s.data.get('pin')),
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
+            'theme': s.data.get('theme', 'system'),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),
             'engine': self._app.engine.status(),
@@ -652,6 +653,20 @@ class Api:
 
     def cloud_friend(self, user_id):
         return self._cloud(self._app.cloud.friend, user_id)
+
+    def cloud_react(self, event_id, verdict):
+        return self._cloud(self._app.cloud.react, event_id, verdict)
+
+    def cloud_set_note(self, t, text, body):
+        return self._cloud(self._app.cloud.set_note, t, text, body)
+
+    def cloud_feedback(self, pairs):
+        return self._cloud(self._app.cloud.feedback, pairs)
+
+    def set_theme(self, mode):
+        self._store.data['theme'] = mode if mode in ('light', 'dark') else 'system'
+        self._store.save()
+        return self.state()
 
     def cloud_conversations(self):
         return self._cloud(self._app.cloud.conversations)
