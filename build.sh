@@ -87,11 +87,36 @@ PLIST="dist/$APP.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string 'Needed to check your AI messages against your class rules.'" "$PLIST" 2>/dev/null || true
 
-# Editing Info.plist above invalidates PyInstaller's signature, and Apple-silicon Macs then call a downloaded copy "damaged".
-# Sign the finished bundle again (ad-hoc; no developer account needed) so it is internally consistent.
-echo "==> Signing the app (ad-hoc)"
-codesign --force --deep --sign - "dist/$APP.app"
-codesign --verify --deep --strict "dist/$APP.app"
+# Sign: with the Developer ID certificate if this Mac has one (then Apple can notarize it and macOS opens it without warnings),
+# otherwise ad-hoc. Editing Info.plist above invalidated the first signature, so every file is signed again, inside-out.
+IDENT=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+APPDIR="dist/$APP.app"
+if [ -n "$IDENT" ]; then
+  echo "==> Signing with: $IDENT"
+  find "$APPDIR" -type f \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) | while read -r f; do
+    file -b "$f" | grep -q "Mach-O" && codesign --force --options runtime --timestamp --entitlements entitlements.plist --sign "$IDENT" "$f"
+  done
+  codesign --force --options runtime --timestamp --entitlements entitlements.plist --sign "$IDENT" "$APPDIR"
+else
+  echo "==> No Developer ID certificate here: signing ad-hoc (people will see an 'unverified developer' warning)"
+  codesign --force --deep --sign - "$APPDIR"
+fi
+codesign --verify --deep --strict "$APPDIR"
+
+notarize() {   # notarize <file>: waits for Apple's answer; stops the build if it is rejected
+  xcrun notarytool submit "$1" --keychain-profile "${NOTARY_PROFILE:-HonestHands}" --wait 2>&1 | tee /tmp/hh_notary.txt
+  grep -q "status: Accepted" /tmp/hh_notary.txt || { echo "Notarization was not accepted. Details: xcrun notarytool log <id> --keychain-profile ${NOTARY_PROFILE:-HonestHands}"; exit 1; }
+}
+CAN_NOTARIZE=0
+if [ -n "$IDENT" ] && xcrun notarytool history --keychain-profile "${NOTARY_PROFILE:-HonestHands}" >/dev/null 2>&1; then CAN_NOTARIZE=1; fi
+if [ "$CAN_NOTARIZE" = 1 ]; then
+  echo "==> Notarizing the app with Apple (a few minutes)"
+  ditto -c -k --keepParent "$APPDIR" "dist/$APP.zip"
+  notarize "dist/$APP.zip"
+  xcrun stapler staple "$APPDIR"
+elif [ -n "$IDENT" ]; then
+  echo "   (signed but NOT notarized: save credentials with 'xcrun notarytool store-credentials HonestHands ...')"
+fi
 
 echo "==> Making the DMG"
 rm -f "$APP.dmg"
@@ -100,6 +125,14 @@ cp -R "dist/$APP.app" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "$APP" -srcfolder "$STAGE" -ov -format UDZO "$APP.dmg" >/dev/null
 rm -rf "$STAGE"
+if [ -n "$IDENT" ]; then
+  codesign --force --timestamp --sign "$IDENT" "$APP.dmg"
+  if [ "$CAN_NOTARIZE" = 1 ]; then
+    echo "==> Notarizing the installer"
+    notarize "$APP.dmg"
+    xcrun stapler staple "$APP.dmg"
+  fi
+fi
 
 echo ""
 echo "==> Done:  $(pwd)/$APP.dmg"
