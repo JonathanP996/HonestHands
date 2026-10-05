@@ -108,8 +108,8 @@ function extChipHTML() {
 function paint() {
   stopTimerTick();
   const rail = document.getElementById('rail');
-  if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.visibility='hidden'; paintOnboarding(); return; }
-  rail.style.visibility = 'visible'; document.getElementById('topbar').style.visibility='visible';
+  if (S && !S.onboarded) { rail.style.visibility = 'hidden'; document.getElementById('topbar').style.display='none'; paintOnboarding(); return; }
+  rail.style.visibility = 'visible'; document.getElementById('topbar').style.display='';
   const sf = document.getElementById('surface'); if (sf) sf.classList.remove('onbing');
   paintWelcome(); paintBadge();
   document.querySelectorAll('#rail .railbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === TAB));

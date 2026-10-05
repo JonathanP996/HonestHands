@@ -79,7 +79,7 @@ function stepAccess() {
 
 function aiStatusHTML() {
   const e = S.engine;
-  if (e.ready) return `<div class="oready">${CHECK}<div><b>The AI is ready</b><span>Running privately on your Mac.</span></div></div>`;
+  if (e.ready) return `<div class="oready">${CHECK}<div><b>Guard is ready</b><span>Running privately on your Mac.</span></div></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     const pr = e.progress, pct = pr && pr.total ? Math.round(100 * pr.done / pr.total) : 0;
     const gb = pr && pr.total ? `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB` : (e.message || 'Starting…');
@@ -169,9 +169,10 @@ function updateOnbStatus() {
     const gb = document.getElementById('o-gb'); if (gb && pr && pr.total) gb.textContent = `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB`;
     return;
   }
-  const was = box.dataset.kind;
-  box.dataset.kind = kind;
-  box.innerHTML = aiStatusHTML();
+  const was = box.dataset.kind, html = aiStatusHTML();
+  if (was === kind && box.dataset.html === html) return;            // nothing changed: don't rebuild (it would replay the pop-in)
+  box.dataset.kind = kind; box.dataset.html = html;
+  box.innerHTML = html;
   const go = document.getElementById('o-ai-go'); if (go) go.onclick = startAI;
   if (kind === 'ready' && was !== 'ready') setTimeout(() => oconfettiAt(box.querySelector('.ocheck'), 30, 1), 300);
 }
@@ -215,13 +216,19 @@ async function finishOnboarding() {
   const r = await api().finish_onboarding();
   if (!r || r.error) return;
   S = r;
-  const veil = document.createElement('div');                       // a short, warm finish instead of an abrupt jump
+  const veil = document.createElement('div');                       // the last page, then an iris that closes onto the app
   veil.className = 'ofinish';
-  veil.innerHTML = `<div class="ofin-card">${oartHTML('finish', 'big')}<h1>You’re all set</h1><p>HonestHands is ready to guard. Start a study session whenever you sit down to work.</p></div>`;
+  veil.innerHTML = `<div class="ofin-ring"></div><div class="ofin-card">${oartHTML('finish', 'big')}<h1>You’re all set</h1><p>HonestHands is ready to guard. Start a study session whenever you sit down to work.</p></div>`;
   document.body.appendChild(veil);
   inkArt(veil.querySelector('.oart'));
   setTimeout(() => oconfetti(window.innerWidth / 2, window.innerHeight * .38, 46, 1.6), 500);
   setTimeout(() => oconfetti(window.innerWidth * .3, window.innerHeight * .5, 22, 1.1), 900);
   setTimeout(() => oconfetti(window.innerWidth * .7, window.innerHeight * .5, 22, 1.1), 1100);
-  setTimeout(() => { TAB = 'home'; paint(); veil.classList.add('out'); setTimeout(() => veil.remove(), 600); }, 2600);
+  setTimeout(() => {
+    TAB = 'home'; paint();                                            // the app is built underneath while the iris closes over it
+    if (OART_REDUCED()) { veil.remove(); return; }
+    document.body.classList.add('appin');
+    veil.classList.add('iris');
+    setTimeout(() => { veil.remove(); document.body.classList.remove('appin'); }, 1500);
+  }, 2600);
 }
