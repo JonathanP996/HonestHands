@@ -105,14 +105,33 @@ function extChipHTML() {
   if (S.ext_live) return `<span class="chip good"><span class="d"></span>Extension on</span>`;
   return `<span class="chip warn"><span class="d"></span>Extension off</span>`;
 }
+// A popup the first time a new version is seen (once per build per launch); "Update now" hands over to Sparkle.
+const UPDATE_POPPED = {};
+function maybeUpdatePopup() {
+  const u = S && S.update;
+  if (!u || !S.onboarded || UPDATE_POPPED[u.build]) return;
+  if (S.session && S.session.locked) return;                       // never interrupt a lock-in
+  const modalEl = document.getElementById('modal'); if (modalEl && !modalEl.hidden) return;
+  UPDATE_POPPED[u.build] = true;
+  const node = el(`<div class="updpop"><div class="up-ic"><span class="ub-dot"></span></div>
+    <h2>A new version is ready</h2>
+    <p class="up-ver">HonestHands ${h(u.version || '')}</p>
+    ${u.notes ? `<p class="up-notes">${h(u.notes)}</p>` : ''}
+    <p class="small muted">It downloads, installs and reopens HonestHands by itself. Your classes and settings stay as they are.</p>
+    <div class="btnrow" style="justify-content:center;margin-top:16px"><button class="btn" id="up-now">Update now</button><button class="btn ghost" id="up-later">Later</button></div></div>`);
+  modal(node);
+  $('#up-now').onclick = async () => { closeModal(); await api().open_update(); toast('Opening the updater…'); };
+  $('#up-later').onclick = () => closeModal();
+}
 function paintUpdateBar() {
   const bar = document.getElementById('updatebar'); if (!bar) return;
   const u = S && S.update, show = !!u && S.onboarded;
   bar.hidden = !show; if (!show) { bar.innerHTML = ''; return; }
   bar.innerHTML = `<span class="ub-dot"></span><div><b>A new version of HonestHands is ready${u.version ? ' (' + h(u.version) + ')' : ''}.</b>${u.notes ? ' <span>' + h(u.notes) + '</span>' : ''}
-    <small>Download it, open it, and drag it over the old one in Applications.</small></div>
-    <button class="btn sm" id="ub-go">Download update</button><button class="btn ghost sm" id="ub-later">Later</button>`;
+    <small>One click installs it and reopens the app.</small></div>
+    <button class="btn sm" id="ub-go">Update now</button><button class="btn ghost sm" id="ub-later">Later</button>`;
   document.getElementById('ub-go').onclick = () => api().open_update();
+  maybeUpdatePopup();
   document.getElementById('ub-later').onclick = async () => { const r = await api().dismiss_update(); if (r && !r.error) { S = r; paintUpdateBar(); } };
 }
 function paint() {
@@ -538,7 +557,7 @@ window.addEventListener('pywebviewready', async () => {
         return;
       }
       if (JSON.stringify(ns.engine) + ns.perms.watching + ns.perms.accessibility + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
-      else { S = ns; paintBadge(); if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
+      else { S = ns; paintBadge(); paintUpdateBar(); if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
         const box=$('#eprog'); if(box) box.innerHTML=`<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}%</div>`; } }
     } catch (_) {}
   }, 1500);

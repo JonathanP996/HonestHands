@@ -29,9 +29,6 @@ def start():
         objc.loadBundle('Sparkle', {}, bundle_path=str(p))
         cls = objc.lookUpClass('SPUStandardUpdaterController')
         _controller = cls.alloc().initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None)
-        # also look right at launch (not only on Sparkle's timer), so a new version pops up soon after the app opens
-        import threading
-        threading.Timer(6.0, lambda: _controller.updater().checkForUpdatesInBackground()).start()
         return True
     except Exception as e:
         print('[sparkle] could not start:', e, flush=True)

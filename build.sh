@@ -101,7 +101,7 @@ PL="dist/$APP.app/Contents/Info.plist"
 SETKV() { /usr/libexec/PlistBuddy -c "Set :$1 $3" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $2 $3" "$PL"; }
 SETKV SUFeedURL string "https://honesthands-site.vercel.app/appcast.xml"
 SETKV SUPublicEDKey string "$(cat sparkle_public_key.txt)"
-SETKV SUEnableAutomaticChecks bool true
+SETKV SUEnableAutomaticChecks bool false      # our own check (updates.py) shows the popup; Sparkle does the installing
 SETKV SUScheduledCheckInterval integer 3600
 BUILDNO_PL=$(python3 -c "import re;print(re.search(r'BUILD = (\d+)', open('version.py').read()).group(1))")
 VERSION_PL=$(python3 -c "import re;print(re.search(r\"VERSION = '([^']*)'\", open('version.py').read()).group(1))")

@@ -9,7 +9,7 @@ import urllib.request
 import net
 import version
 
-CHECK_EVERY = 6 * 3600
+CHECK_EVERY = 3600
 
 
 def enabled():
@@ -56,7 +56,7 @@ class Updater:
         if not enabled():
             return
         def loop():
-            time.sleep(25)
+            time.sleep(8)
             while True:
                 self.check_now()
                 time.sleep(CHECK_EVERY)

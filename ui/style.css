@@ -1056,3 +1056,9 @@ body:has(#surface.onbing) #shell{padding:14px}
 #updatebar[hidden]{display:none}
 #updatebar div{flex:1;font-size:14px;line-height:1.4}#updatebar span{color:var(--ink-2)}#updatebar small{display:block;color:var(--muted);font-size:12px;margin-top:1px}
 .ub-dot{width:10px;height:10px;border-radius:50%;background:var(--green);animation:ping 2s infinite;flex:none}
+
+/* new-version popup */
+.updpop{text-align:center;padding:6px 8px 2px;max-width:380px}
+.up-ic{width:54px;height:54px;border-radius:18px;margin:0 auto 12px;display:grid;place-items:center;background:var(--lav)}
+.up-ic .ub-dot{width:16px;height:16px}
+.updpop h2{font-size:22px;margin-bottom:4px}.up-ver{font-weight:700;color:var(--ink-2);margin-bottom:6px}.up-notes{color:var(--ink-2);margin-bottom:8px}

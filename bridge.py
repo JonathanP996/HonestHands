@@ -682,6 +682,8 @@ class Api:
         return self.state()
 
     def open_update(self):
+        if sparkle.check_now():
+            return True                                        # Sparkle's window: download, install, reopen
         import webbrowser
         u = self._app.updater.latest
         webbrowser.open((u or {}).get('url') or version.SITE + '/HonestHands.dmg')

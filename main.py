@@ -114,8 +114,8 @@ class App:
 
     def _start_updates(self):
         """Installed app: Sparkle updates it by itself. From source: the plain banner."""
-        if not sparkle.start():
-            self.updater.start()
+        sparkle.start()                 # installs the update when the person says yes
+        self.updater.start()            # notices a new build and drives the in-app popup (works with or without Sparkle)
 
     def _update_found(self, latest):
         watcher.notify('HonestHands', f"A new version is ready{(' (' + latest['version'] + ')') if latest.get('version') else ''}. Open HonestHands to update.")
