@@ -14,6 +14,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+import net
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -76,7 +78,7 @@ class Cloud:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(URL + path, data=data, headers=h, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout, context=net.context()) as r:
                 raw = r.read().decode() or 'null'
                 return r.status, json.loads(raw)
         except urllib.error.HTTPError as e:

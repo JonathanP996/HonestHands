@@ -8,6 +8,8 @@ import json
 import threading
 import urllib.request
 
+import net
+
 from store import APP_DIR
 
 AI_NAME = 'AI'                # what the built-in AI is called in the app
@@ -141,7 +143,7 @@ class Engine:
         part = dest.with_name(dest.name + '.part')
         have = part.stat().st_size if part.exists() else 0     # resume an interrupted download
         req = urllib.request.Request(url, headers=dict(UA, **({'Range': f'bytes={have}-'} if have else {})))
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60, context=net.context()) as r:
             resumed = have > 0 and getattr(r, 'status', 200) == 206
             f = open(part, 'ab' if resumed else 'wb')
             total = int(r.headers.get('Content-Length') or 0) + (have if resumed else 0)

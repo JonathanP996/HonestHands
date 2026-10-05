@@ -6,3 +6,4 @@ pyobjc-framework-ApplicationServices>=10.3
 pywebview>=5.3
 pyinstaller>=6.10
 llama-cpp-python[server]>=0.3.2
+certifi
