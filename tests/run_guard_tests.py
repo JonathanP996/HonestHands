@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Regression suite for the AI guard.
 
-    python3 tests/run_guard_tests.py                 # use whichever model Settings has selected
-    python3 tests/run_guard_tests.py --model small   # or: --model large
+    python3 tests/run_guard_tests.py                 # the built-in model (Handrail)
     python3 tests/run_guard_tests.py --only hw2-     # only cases whose id starts with this
 
 It runs the REAL guard (real model, real checklist, your saved classes and assignments) on every case in
@@ -15,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import ai_guard                                  # noqa: E402
-from engine import Engine, MODELS                # noqa: E402
+from engine import Engine                        # noqa: E402
 from store import Store, TUTOR_CLASS             # noqa: E402
 
 CASES = ROOT / 'tests' / 'guard_cases.json'
@@ -37,7 +36,6 @@ def prompt_fingerprint():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--model', choices=list(MODELS), help='model to test (default: the one chosen in Settings)')
     ap.add_argument('--only', default='', help='run only case ids starting with this')
     ap.add_argument('--config', help='read classes from this config.json (e.g. a backup) instead of the live one')
     ap.add_argument('--no-record', action='store_true', help="don't append to results.jsonl")
@@ -47,8 +45,6 @@ def main():
         import store as _st
         _st.CONFIG = Path(args.config)
     store = Store()
-    if args.model:
-        store.data['engine']['model'] = args.model            # in memory only; nothing is saved
     engine = Engine(store)
     engine.autostart()
     t0 = time.time()
@@ -56,10 +52,6 @@ def main():
         time.sleep(0.5)
     if not engine.ready():
         sys.exit(f'The AI never became ready: {engine.message}')
-    wanted = MODELS[args.model]['file'] if args.model else None
-    if wanted and engine.model()['file'] != wanted:
-        sys.exit(f'Asked for the "{args.model}" model but it is not downloaded, so the app would fall back to '
-                 f'{engine.model()["file"]}. Download it in Settings first.')
     model_file = engine.model()['file']
     guard = ai_guard.AIGuard(store, engine)
 

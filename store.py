@@ -14,7 +14,7 @@ DEFAULTS = {
     'session': None,
     'mode': 'warn',
     'pin': '',
-    'engine': {'backend': 'builtin', 'model': 'small', 'ollama_model': 'qwen2.5:3b'},
+    'engine': {'backend': 'builtin', 'model': 'small'},
     'onboarded': False,
     'cloud': {},
 }
@@ -60,7 +60,7 @@ class Store:
             for k in DEFAULTS:
                 if k in saved:
                     data[k] = saved[k]
-            data['engine'] = dict(DEFAULTS['engine'], **saved.get('engine', {}))
+            data['engine'] = dict(DEFAULTS['engine'])           # one built-in model; older choices are ignored
         return data
 
     def save(self):

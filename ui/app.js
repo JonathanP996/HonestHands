@@ -44,6 +44,13 @@ async function askPin(reason) {
 
 async function refresh() { S = await api().state(); paint(); }
 
+// Fit the sidebar's vertical spacing to the window so all its items stay visible (width and icons scale freely).
+function fitRail() {
+  const rv = Math.max(1, Math.min(1.25, (window.innerHeight - 28) / 700));
+  document.documentElement.style.setProperty('--rv', rv.toFixed(3));
+}
+window.addEventListener('resize', fitRail); fitRail();
+
 // ---- sidebar greeting (signed-in users) ----
 function paintWelcome() {
   const cu = (S && S.cloud_user) || {}, box = document.getElementById('railwelcome');
@@ -70,11 +77,9 @@ const TAB_META = {
 };
 function engineChipHTML() {
   const e = S.engine;
-  const names = { builtin: 'Built-in AI', ollama: 'Ollama', keywords: 'Keyword rules' };
-  if (e.backend === 'keywords') return `<span class="chip">Keyword rules</span>`;
-  if (e.ready) return `<span class="chip good"><span class="d"></span>${names[e.backend]} ready</span>`;
-  if (e.state === 'downloading' || e.state === 'starting') return `<span class="chip warn"><span class="spin"></span> ${names[e.backend]}…</span>`;
-  return `<span class="chip warn"><span class="d"></span>${names[e.backend]} not ready</span>`;
+  if (e.ready) return `<span class="chip good"><span class="d"></span>${h(e.name)} ready</span>`;
+  if (e.state === 'downloading' || e.state === 'starting') return `<span class="chip warn"><span class="spin"></span> ${h(e.name)}…</span>`;
+  return `<span class="chip warn"><span class="d"></span>${h(e.name)} not ready</span>`;
 }
 function extChipHTML() {
   if (S.ext_live) return `<span class="chip good"><span class="d"></span>Extension on</span>`;
@@ -104,17 +109,16 @@ document.querySelectorAll('#rail .railbtn[data-tab]').forEach(b => b.onclick = (
 
 function engineBanner() {
   const e = S.engine;
-  if (e.backend === 'keywords') return '';
   if (e.ready) return '';
   if (e.state === 'needs_setup')
-    return `<div class="banner warn"><div><b>The AI guard needs a one-time setup.</b><div class="small">Until then, checking uses keyword rules only. Set it up in Settings.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
+    return `<div class="banner warn"><div><b>${h(e.name)} needs a one-time setup.</b><div class="small">Until then, checking uses simple keyword rules only. It's a ${e.size_gb} GB download, and everything stays on this Mac.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     let bar = '';
     if (e.progress && e.progress.total) { const pct = Math.round(100 * e.progress.done / e.progress.total);
-      bar = `<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${e.progress.label}: ${pct}% of ${(e.progress.total/1e9).toFixed(1)} GB</div>`; }
-    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message||'Preparing the AI guard…')}</b>${bar}</div></div>`;
+      bar = `<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}% of ${(e.progress.total/1e9).toFixed(1)} GB</div>`; }
+    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message || 'Preparing ' + e.name + '…')}</b>${bar}</div></div>`;
   }
-  if (e.state === 'error') return `<div class="banner warn"><div><b>AI guard problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. See Settings.</div></div></div>`;
+  if (e.state === 'error') return `<div class="banner warn"><div><b>${h(e.name)} ran into a problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. You can retry in Settings.</div></div></div>`;
   return '';
 }
 
@@ -127,136 +131,6 @@ function permBanner() {
 
 
 // ---- Onboarding ----
-let ONB = 0;
-let lastOnbSig = '';
-function onbStructSig() {
-  const e = S.engine;
-  return [ONB, S.classes.length, e.backend, e.model, e.state, e.ready].join('|');
-}
-function paintOnboarding(animate = true) {
-  const m = document.getElementById('main');
-  const steps = [welcomeStep, guardStep, extensionStep, firstClassStep];
-  m.innerHTML = `<div class="wrap onb">${steps[Math.min(ONB, steps.length-1)]()}</div>`;
-  if (animate) { m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter'); }
-  wireOnboarding();
-  lastOnbSig = onbStructSig();
-}
-// Update just the download status/progress without rebuilding the screen (no flicker).
-function updateOnbStatus() {
-  const box = document.querySelector('.onb-status');
-  if (box) box.innerHTML = guardStatusHTML();
-}
-function dots(i){ return `<div class="onb-dots">${[0,1,2,3].map(n=>`<span class="${n===i?'on':''}"></span>`).join('')}</div>`; }
-
-function welcomeStep() {
-  return `<div class="onb-hero center">
-    <div class="onb-seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 11V5.5a1.3 1.3 0 0 1 2.6 0V10"/><path d="M10.6 10V4.4a1.3 1.3 0 0 1 2.6 0V10"/>
-      <path d="M13.2 10.2V5.4a1.3 1.3 0 0 1 2.6 0V12"/>
-      <path d="M15.8 12V8.6a1.3 1.3 0 0 1 2.5 0c0 3.2.1 4.4-.6 6.3-.8 2.2-2.4 3.6-4.8 3.6-2 0-3.2-.5-4.4-1.9l-2.7-3.2a1.35 1.35 0 0 1 1.9-1.9L7 11"/></svg></div>
-    <h1 class="onb-title">Welcome to HonestHands</h1>
-    <p class="onb-verse">“Let the thief no longer steal, but rather let him labor, doing honest work with his own hands, so that he may have something to share with anyone in need.”<br><span class="ref">Ephesians 4:28</span></p>
-    <p class="onb-lead">HonestHands checks what you’re about to send to an AI against your class’s own rules, and warns you before you cross a line — so AI stays a tutor, not a shortcut. Everything runs on your Mac.</p>
-    <div class="btnrow center-row"><button class="btn" id="o-next">Get started</button></div>
-    ${dots(0)}</div>`;
-}
-function guardStatusHTML() {
-  const e = S.engine;
-  if (e.backend === 'keywords') return `<p class="small muted">You’re on keyword rules — no download, but less nuanced. You can switch to the AI guard anytime in Settings.</p>`;
-  if (e.ready) return `<p class="small" style="color:var(--ok)">✓ The AI guard is ready.</p>`;
-  if (e.state === 'downloading' || e.state === 'starting') {
-    const pct = e.progress && e.progress.total ? Math.round(100*e.progress.done/e.progress.total) : 0;
-    const of = e.progress && e.progress.total ? ` · ${(e.progress.done/1e9).toFixed(1)} of ${(e.progress.total/1e9).toFixed(1)} GB` : '';
-    return `<p class="small"><span class="spin"></span> ${h(e.message||'Preparing…')}${of}</p><div class="progress"><div style="width:${pct}%"></div></div>`;
-  }
-  if (e.state === 'error') return `<p class="small" style="color:var(--stop)">${h(e.message)}</p>`;
-  return `<p class="small muted">${h(e.message||'The AI guard needs a one-time setup.')}</p>`;
-}
-function guardStep() {
-  const e = S.engine;
-  const ready = e.ready;
-  const status = guardStatusHTML();
-  return `<div class="onb-card">
-    <h1 class="onb-title">Choose your guard</h1>
-    <p class="onb-lead">This is what decides whether a message is OK. The built-in AI runs privately on your Mac after a one-time download. On your machine, the larger model is a great fit.</p>
-    <div class="field"><label>Guard</label><select id="o-be">
-      <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — private, runs on this Mac</option>
-      <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
-      <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no download</option>
-    </select></div>
-    <div class="field" id="o-mf" ${e.backend==='builtin'?'':'hidden'}><label>Model size</label><select id="o-mdl">
-      ${Object.entries(e.models).map(([k,v])=>`<option value="${k}" ${e.model===k?'selected':''}>${h(v)}</option>`).join('')}</select></div>
-    <div class="btnrow"><button class="btn ghost sm" id="o-apply">Download &amp; set up</button></div>
-    <div class="onb-status">${status}</div>
-    <div class="btnrow center-row mt"><button class="btn ghost" id="o-back">Back</button>
-      <button class="btn" id="o-next">${ready||e.backend==='keywords'?'Continue':'Continue anyway'}</button></div>
-    ${dots(1)}</div>`;
-}
-function extensionStep() {
-  const ext = S.extension || {browsers:[], installed_dir:''};
-  const ready = !!ext.installed_dir;
-  const browsers = ext.browsers||[];
-  return `<div class="onb-card">
-    <h1 class="onb-title">Install the browser guard</h1>
-    <p class="onb-lead">AI websites like Gemini hide their send button from the Mac. A small companion extension closes that gap. It only works while HonestHands is running and a session is active — it never watches anything otherwise. This step is required for website coverage.</p>
-    <div class="btnrow"><button class="btn" id="o-extprep">${ready?'Re-copy files':'Set up the extension'}</button>
-      ${ready?'<button class="btn ghost" id="o-extopen">Open folder</button>':''}</div>
-    <div class="onb-status" id="o-extstatus"></div>
-    ${ready?`<div class="step-note mt"><b>Enable it once in your browser:</b><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Open Extensions ${browsers.length?'('+browsers.map(h).join(', ')+')':''}</li><li>Turn on <b>Developer mode</b></li><li><b>Load unpacked</b> → choose the folder</li></ol></div><div class="btnrow mt">`+browsers.filter(b=>['Google Chrome','Microsoft Edge','Brave'].includes(b)).map(b=>`<button class="btn ghost sm" data-obrowser="${h(b)}">Open ${h(b)}</button>`).join('')+`</div>`:''}
-    <div class="btnrow center-row mt"><button class="btn ghost" id="o-back">Back</button>
-      <button class="btn" id="o-next">${ready?'I\u2019ve enabled it — continue':'Continue'}</button></div>
-    ${dots(2)}</div>`;
-}
-function firstClassStep() {
-  const has = S.classes.length>0;
-  return `<div class="onb-card center">
-    <h1 class="onb-title">Add your first class</h1>
-    <p class="onb-lead">Give HonestHands a syllabus and it learns that class’s AI rules — what’s allowed, what isn’t — straight from the document, with the exact lines quoted back to you.</p>
-    ${has ? `<p class="small" style="color:var(--ok)">✓ ${h(S.classes[0].name)} added${S.classes.length>1?` and ${S.classes.length-1} more`:''}.</p>` : ''}
-    <div class="btnrow center-row"><button class="btn" id="o-add">${has?'Add another':'Add a class'}</button>
-      ${has?`<button class="btn" id="o-done">Finish</button>`:`<button class="btn ghost" id="o-later">I’ll do this later</button>`}</div>
-    <button class="btn ghost sm" id="o-back" style="margin-top:14px">Back</button>
-    ${dots(3)}</div>`;
-}
-
-function wireOnboarding() {
-  const next = document.getElementById('o-next');
-  if (next) next.onclick = () => { ONB++; paintOnboarding(); };
-  const back = document.getElementById('o-back');
-  if (back) back.onclick = () => { ONB = Math.max(0, ONB-1); paintOnboarding(); };
-  const skip = document.getElementById('o-skip');
-  if (skip) skip.onclick = finishOnboarding;
-  const later = document.getElementById('o-later');
-  if (later) later.onclick = finishOnboarding;
-  const done = document.getElementById('o-done');
-  if (done) done.onclick = finishOnboarding;
-
-  const be = document.getElementById('o-be');
-  if (be) be.onchange = () => { document.getElementById('o-mf').hidden = be.value !== 'builtin'; };
-  const apply = document.getElementById('o-apply');
-  if (apply) apply.onclick = async () => { apply.disabled = true;
-    const r = await api().set_engine(be.value, (document.getElementById('o-mdl')||{}).value||'small', '');
-    if (r.error) toast(r.error); else { S = r; paintOnboarding(); } };
-
-  const add = document.getElementById('o-add');
-  if (add) add.onclick = () => openDocFlow('class');
-
-  const extprep = document.getElementById('o-extprep');
-  if (extprep) extprep.onclick = async ()=>{ extprep.disabled=true;
-    const st=document.getElementById('o-extstatus'); if(st) st.innerHTML='<span class="spin"></span> Copying files…';
-    const r=await api().prepare_extension();
-    if(r.error){ if(st) st.textContent=r.error; } else { S=await api().state(); paintOnboarding(false); }
-  };
-  const extopen = document.getElementById('o-extopen');
-  if (extopen) extopen.onclick = ()=> api().open_extension_folder();
-  document.querySelectorAll('[data-obrowser]').forEach(b=> b.onclick = ()=> api().open_browser_extensions_page(b.dataset.obrowser));
-}
-
-async function finishOnboarding() {
-  const r = await api().finish_onboarding();
-  if (r && !r.error) { S = r; TAB = 'home'; paint(); }
-}
-
 // ---- Home / study session ----
 function paintHome() {
   const m = $('#main'); const sess = S.session;
@@ -497,18 +371,10 @@ async function paintLog() {
 // ---- Settings ----
 function paintSettings() {
   const m = $('#main'); const e = S.engine;
-  const modelOpts = Object.entries(e.models).map(([k,v]) => `<option value="${k}" ${e.model===k?'selected':''}>${h(v)}</option>`).join('');
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
-    <div class="card"><h2>The AI guard</h2><p class="sub">Who decides whether a message is OK.</p>
-      <div class="field"><label>Guard</label><select id="be">
-        <option value="builtin" ${e.backend==='builtin'?'selected':''}>Built-in AI — runs on this Mac, private, one-time download</option>
-        <option value="ollama" ${e.backend==='ollama'?'selected':''}>Ollama — if you already use it</option>
-        <option value="keywords" ${e.backend==='keywords'?'selected':''}>Keyword rules only — no AI, no download</option>
-      </select></div>
-      <div class="field" id="mf" ${e.backend==='builtin'?'':'hidden'}><label>Model size</label><select id="mdl">${modelOpts}</select></div>
-      <div class="field" id="of" ${e.backend==='ollama'?'':'hidden'}><label>Ollama model name</label><input id="om" value="${h(e.ollama_model)}"></div>
-      <div class="btnrow"><button class="btn" id="apply">Apply</button>
-        <span class="small ${e.ready?'':'muted'}" id="est">${e.ready?'Ready.':h(e.message||'')}</span></div>
+    <div class="card"><h2>${h(e.name)}</h2><p class="sub">The AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
+      <div class="btnrow"><span class="chip ${e.ready ? 'good' : 'warn'}"><span class="d"></span>${e.ready ? 'Ready' : h(e.message || 'Not set up yet')}</span>
+        ${e.ready ? '' : `<button class="btn" id="apply">${e.state === 'error' ? 'Try again' : 'Download &amp; set up'}</button>`}</div>
       <div id="eprog"></div>
     </div>
     <div class="card"><h2>Browser extension</h2>
@@ -525,7 +391,7 @@ function paintSettings() {
     <div class="card"><h2>This Mac</h2>
       <div class="btnrow"><button class="btn ghost sm" id="acc">Accessibility settings</button>
         <button class="btn ghost sm" id="data">Open data folder</button></div>
-      <p class="small muted mt">Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · Guard ${S.perms.watching ? 'active' : 'inactive'}</p></div>
+      <p class="small muted mt">Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · The guard is ${S.perms.watching ? 'on' : 'off'}</p></div>
     </div>`;
   // extension section
   (function(){
@@ -561,10 +427,9 @@ function paintSettings() {
     box.querySelectorAll('[data-extbrowser]').forEach(b=> b.onclick = ()=> api().open_browser_extensions_page(b.dataset.extbrowser));
   })();
 
-  $('#be').onchange = () => { const v = $('#be').value; $('#mf').hidden = v !== 'builtin'; $('#of').hidden = v !== 'ollama'; };
-  $('#apply').onclick = async () => { $('#apply').disabled = true;
-    const r = await api().set_engine($('#be').value, $('#mdl').value, $('#om')?.value || '');
-    if (r.error) toast(r.error); else { S = r; toast('Applied. Preparing…'); paint(); } };
+  if ($('#apply')) $('#apply').onclick = async () => { $('#apply').disabled = true;
+    const r = await api().setup_ai();
+    if (r.error) toast(r.error); else { S = r; toast('Getting ' + S.engine.name + ' ready…'); paint(); } };
   if ($('#pinrm')) $('#pinrm').onclick = async () => { const r = await api().remove_pin($('#op').value || '');
     if (r.error) toast(r.error); else { S = r; toast('PIN removed.'); paint(); } };
   $('#pinbtn').onclick = async () => { const r = await api().set_pin($('#op')?.value || '', $('#np').value);
@@ -578,7 +443,7 @@ window.addEventListener('pywebviewready', async () => {
   await refresh();
   setInterval(async () => {
     try { const sessSig = x => x ? [x.class_id,x.assignment_id,x.started].join(',') : '';
-      const prev = JSON.stringify(S.engine) + S.perms.watching + S.ext_live + sessSig(S.session);
+      const prev = JSON.stringify(S.engine) + S.perms.watching + S.perms.accessibility + S.ext_live + sessSig(S.session);
       const ns = await api().state();
       if (!ns.onboarded) {
         S = ns;
@@ -586,7 +451,7 @@ window.addEventListener('pywebviewready', async () => {
         else updateOnbStatus();                                    // just progress ticking: update in place
         return;
       }
-      if (JSON.stringify(ns.engine) + ns.perms.watching + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
+      if (JSON.stringify(ns.engine) + ns.perms.watching + ns.perms.accessibility + ns.ext_live + sessSig(ns.session) !== prev) { S = ns; paint(); }
       else { S = ns; if (TAB==='settings' && S.engine.progress){ const e=S.engine, pct=e.progress.total?Math.round(100*e.progress.done/e.progress.total):0;
         const box=$('#eprog'); if(box) box.innerHTML=`<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}%</div>`; } }
     } catch (_) {}

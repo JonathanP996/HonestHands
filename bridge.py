@@ -497,17 +497,25 @@ class Api:
         return True
 
     # ---------- settings ----------
-    def set_engine(self, backend, model='small', ollama_model=''):
-        cfg = self._store.data['engine']
-        cfg['backend'] = backend if backend in ('builtin', 'ollama', 'keywords') else 'builtin'
-        cfg['model'] = model if model in ('small', 'large') else 'small'
-        if ollama_model:
-            cfg['ollama_model'] = ollama_model.strip()
-        self._store.save()
+    def setup_ai(self):
+        """Download (if needed) and load the built-in AI. Safe to call again to retry."""
         self._app.ai_guard.forget()
-        self._app.engine.override = None
         self._app.engine.start()
         return self.state()
+
+    def request_accessibility(self):
+        watcher.has_accessibility(prompt=True)         # shows macOS's own permission prompt the first time
+        watcher.open_accessibility_settings()
+        return True
+
+    def test_notification(self):
+        watcher.notify('HonestHands', 'This is how a warning from your guard will look.')
+        return True
+
+    def open_notification_settings(self):
+        import subprocess
+        subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.Notifications-Settings.extension'])
+        return True
 
     def set_pin(self, old_pin, new_pin):
         if not self._pin_ok(old_pin):

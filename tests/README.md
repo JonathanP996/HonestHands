@@ -4,11 +4,11 @@
 assignment. `run_guard_tests.py` runs the real guard on all of them and appends the outcome to `results.jsonl`.
 
     source .venv/bin/activate
-    python3 tests/run_guard_tests.py                  # the model chosen in Settings
-    python3 tests/run_guard_tests.py --model large    # compare another model
+    python3 tests/run_guard_tests.py                  # the built-in model (Handrail)
+    python3 tests/run_guard_tests.py --config ~/Library/Application\ Support/HonestHands/backup-XXXX/config.json   # use a backed-up config
     python3 tests/run_guard_tests.py --only hw2-latex # a subset (not recorded)
 
-Run it whenever you change the **model**, the **prompts** (`ai_guard.py`), or the **policy text** of a class.
+Run it whenever you change the **prompts** (`ai_guard.py`), or the **policy text** of a class.
 The summary shows accuracy, speed, newly passing cases and any REGRESSION (a case that passed on the previous run
 with the same model). `results.jsonl` is the running history: model, prompt fingerprint, git commit, accuracy.
 

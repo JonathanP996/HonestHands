@@ -687,3 +687,104 @@ body.morphing .sb-in{animation:none;opacity:0}
 .rw-text small{font-size:11.5px;color:var(--rail-ink);letter-spacing:.3px}
 .rw-text b{font-family:var(--carve);font-size:17px;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 #rail:hover .rw-text{opacity:1;transform:none;transition-delay:.12s}
+
+/* =====================================================================
+   First-run setup (big, friendly, readable)
+   ===================================================================== */
+.onb2{max-width:960px;margin:0 auto;padding-top:1.5vh}
+.oprog{display:flex;gap:12px;margin:0 0 22px}
+.oprog .ostep{flex:1;display:flex;flex-direction:column;gap:9px;font-size:12.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);transition:color .3s}
+.oprog .ostep i{height:7px;border-radius:99px;background:var(--line);position:relative;overflow:hidden;transition:background .4s}
+.oprog .ostep.past i,.oprog .ostep.now i{background:var(--green)}
+.oprog .ostep.now{color:var(--ink)}.oprog .ostep.past{color:var(--ok)}
+.oprog .ostep.now i::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);animation:shine 2.4s ease-in-out infinite}
+@media (max-width:720px){.oprog .ostep span{display:none}}
+.ocard{background:var(--panel);border:1px solid var(--line);border-radius:32px;padding:clamp(28px,4.2vw,56px);box-shadow:var(--shadow)}
+.ocard.hero{text-align:center}
+.oicon{width:84px;height:84px;border-radius:26px;display:grid;place-items:center;margin-bottom:24px;color:var(--green);
+  background:linear-gradient(150deg,var(--mint),var(--sky));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 18%,transparent)}
+.oicon.big{width:104px;height:104px;border-radius:32px;margin:0 auto 26px;animation:float 5s ease-in-out infinite}
+.oi{width:44px;height:44px}.oicon.big .oi{width:58px;height:58px}
+@keyframes float{50%{transform:translateY(-6px)}}
+.otitle{font-family:var(--carve);font-size:clamp(32px,4.4vw,48px);font-weight:600;line-height:1.08;letter-spacing:-.3px;margin-bottom:16px}
+.otitle.xl{font-size:clamp(40px,5.8vw,66px);letter-spacing:-.8px}
+.olead{font-size:clamp(16.5px,1.8vw,20px);line-height:1.62;color:var(--ink-2);max-width:64ch;margin-bottom:28px}
+.hero .olead{margin-inline:auto}
+.overse{font-family:var(--fig);font-style:italic;font-size:clamp(15.5px,1.6vw,18px);line-height:1.65;color:var(--muted);max-width:56ch;margin:0 auto 22px}
+.overse .ref{font-family:var(--carve);font-style:normal;color:var(--brass);letter-spacing:.6px;font-size:14px}
+.otrio{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:4px 0 26px;text-align:left}
+.otrio.two{grid-template-columns:1fr 1fr}
+.otrio div{background:var(--panel-2);border:1px solid var(--line);border-radius:22px;padding:20px 22px}
+.otrio b{display:block;font-family:var(--carve);font-size:19px;margin-bottom:6px}.otrio span{font-size:15px;line-height:1.55;color:var(--muted)}
+@media (max-width:760px){.otrio,.otrio.two{grid-template-columns:1fr}}
+.osmall{font-size:14.5px;color:var(--muted);text-align:center;margin:6px 0}.osmall.left{text-align:left}
+.onav{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:34px;flex-wrap:wrap}
+.onav.center{justify-content:center}.onav-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.btn.big{padding:16px 34px;font-size:17px}.btn.xl{padding:19px 48px;font-size:20px}
+.oskip{font-size:15px;color:var(--muted);margin-right:6px}
+
+.oitem{display:flex;align-items:center;gap:18px;padding:20px 24px;border-radius:24px;background:var(--panel-2);border:1px solid var(--line);margin-bottom:14px;transition:background .4s,border-color .4s}
+.oitem.done{background:var(--ok-bg);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.oitem-i{width:54px;height:54px;border-radius:17px;display:grid;place-items:center;background:var(--panel);color:var(--ink-2);flex:none;transition:.4s}
+.oitem-i svg{width:28px;height:28px}.oitem.done .oitem-i{background:var(--ok);color:#fff}
+.oitem-t{flex:1;min-width:0}.oitem-t b{display:block;font-size:19px}
+.oitem-t em{font-style:normal;font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--stop);margin-left:8px;vertical-align:2px}
+.oitem-t em.opt{color:var(--muted)}.oitem-t span{display:block;font-size:15px;line-height:1.5;color:var(--muted);margin-top:3px}
+.ostatus.ok{font-weight:800;color:var(--ok);white-space:nowrap}.obtns{display:flex;gap:8px;flex-wrap:wrap}
+.osteps{margin:0 0 18px 26px;font-size:16px;line-height:1.95;color:var(--ink-2)}
+.ocheck{stroke-dasharray:30;stroke-dashoffset:30;animation:ocheck .55s .08s ease forwards}
+@keyframes ocheck{to{stroke-dashoffset:0}}
+
+.oai{margin:6px 0 10px}
+.obig{text-align:center;padding:12px 0 6px}
+.opct{font-family:var(--fig);font-size:clamp(72px,11vw,124px);line-height:1;letter-spacing:-2px}.opct small{font-size:.38em;color:var(--muted);margin-left:4px}
+.obar{height:18px;border-radius:99px;background:var(--panel-2);overflow:hidden;margin:20px auto 12px;max-width:600px;box-shadow:inset 0 0 0 1px var(--line)}
+.obar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green),color-mix(in srgb,var(--green) 65%,#fff));transition:width .7s cubic-bezier(.2,.8,.2,1);position:relative;overflow:hidden}
+.obar i::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);animation:shine 2s ease-in-out infinite}
+.oready{display:flex;align-items:center;gap:18px;padding:20px 24px;border-radius:24px;background:var(--ok-bg);color:var(--ok);margin:10px 0}
+.oready .ocheck{width:38px;height:38px;flex:none}.oready b{display:block;font-size:20px}.oready span{font-size:15px;color:var(--ink-2)}
+.oerr{padding:22px 24px;border-radius:24px;background:var(--panel-2);display:flex;flex-direction:column;gap:12px;align-items:flex-start;font-size:15.5px}
+.oerr.calm{flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}.oerr b{font-size:18px;color:var(--stop)}
+.spin.big{width:60px;height:60px;border-width:6px}
+
+.ostatusbar{display:flex;align-items:center;gap:11px;padding:12px 20px;border-radius:999px;background:var(--panel-2);font-weight:700;font-size:15px;width:fit-content;margin-bottom:22px;color:var(--ink-2)}
+.ostatusbar i{width:11px;height:11px;border-radius:50%;background:var(--brass-2);animation:ping 2s infinite}
+.ostatusbar.ok{background:var(--ok-bg);color:var(--ok)}.ostatusbar.ok i{background:var(--ok)}
+.obig-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;counter-reset:s}
+.obig-steps li{display:flex;align-items:center;gap:18px;padding:18px 22px;border-radius:22px;background:var(--panel-2);border:1px solid var(--line);transition:opacity .3s,background .4s}
+.obig-steps li::before{counter-increment:s;content:counter(s);width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:17px;background:var(--panel);color:var(--ink-2)}
+.obig-steps li.done{background:var(--ok-bg)}.obig-steps li.done::before{content:"✓";background:var(--ok);color:#fff}
+.obig-steps li.dim{opacity:.5}.obig-steps li>div:first-of-type{flex:1;min-width:0}
+.obig-steps b{display:block;font-size:18px}.obig-steps span{display:block;font-size:14.5px;color:var(--muted);margin-top:2px}
+
+.ofinish{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(14px);animation:ofin .4s ease both}
+.ofinish.out{opacity:0;transition:opacity .5s ease}
+@keyframes ofin{from{opacity:0}}
+.ofin-card{text-align:center;max-width:480px;padding:30px}
+.ofin-card .ocheck{display:block;width:118px;height:118px;padding:28px;margin:0 auto 24px;border-radius:50%;background:var(--green);color:var(--green-ink);animation:ocheck .6s .2s ease forwards,pop .6s cubic-bezier(.3,1.5,.4,1)}
+@keyframes pop{from{transform:scale(.3)}}
+.ofin-card h1{font-family:var(--carve);font-size:48px;margin-bottom:10px}.ofin-card p{font-size:18px;color:var(--ink-2);line-height:1.6}
+@media (prefers-reduced-motion:reduce){.oicon.big,.oprog .ostep.now i::after,.obar i::after,.ostatusbar i{animation:none!important}.ocheck{animation:none!important;stroke-dashoffset:0}}
+
+/* =====================================================================
+   Sidebar, 25% larger. --rs scales width / icons / logo / text; --rv scales the vertical spacing and is fitted to the
+   window height in app.js, so every item stays visible (the rail scrolls if the window is very short).
+   ===================================================================== */
+:root{--rs:1.25;--rv:1.2}
+#rail{width:calc(76px * var(--rs));padding:calc(38px * var(--rv)) 0 calc(20px * var(--rv));gap:calc(15px * var(--rv));
+  overflow-x:hidden;overflow-y:auto;scrollbar-width:none}
+#rail::-webkit-scrollbar{display:none}
+#rail:hover{width:calc(224px * var(--rs))}
+#rail .logo{width:calc(58px * var(--rs));height:calc(58px * var(--rs));border-radius:calc(18px * var(--rs));
+  margin-top:calc(6px * var(--rv));margin-bottom:calc(32px * var(--rv));flex:none}
+#rail .logo.has-welcome{margin-bottom:calc(12px * var(--rv))}
+#rail .logo svg{width:calc(32px * var(--rs));height:calc(32px * var(--rs))}
+.railbtn{flex:none;width:calc(100% - 20px * var(--rs));margin:0 calc(10px * var(--rs));height:calc(50px * var(--rv));border-radius:calc(15px * var(--rs))}
+.railbtn .ico{width:calc(56px * var(--rs))}
+.railbtn .ico svg{width:calc(22px * var(--rs));height:calc(22px * var(--rs))}
+.railbtn .label{font-size:calc(14.5px * var(--rs))}
+.railbtn.active::before{width:calc(4px * var(--rs));height:calc(26px * var(--rv))}
+.railwelcome{width:calc(100% - 20px * var(--rs));margin:0 calc(10px * var(--rs)) calc(18px * var(--rv));height:calc(46px * var(--rv))}
+.rw-av{width:calc(34px * var(--rs));height:calc(34px * var(--rs));margin:0 calc(11px * var(--rs));font-size:calc(15px * var(--rs))}
+.rw-text small{font-size:calc(11.5px * var(--rs))}
+.rw-text b{font-size:calc(17px * var(--rs));max-width:calc(140px * var(--rs))}

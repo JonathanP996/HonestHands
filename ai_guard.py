@@ -245,7 +245,7 @@ class AIGuard:
             result = dict(kw, source='keywords')
             if result.get('level') == 'flag' and result.get('reasons'):
                 result.setdefault('reason', result['reasons'][0])
-            if not kw['hard'] and self.engine.cfg['backend'] != 'keywords':
+            if not kw['hard']:
                 result['note'] = 'The AI guard isn\'t ready, so keyword rules were used.'
         else:
             try:
