@@ -122,7 +122,7 @@ function stepAccount() {
     return ostage({ art: 'account', small: true, title: up ? 'Create your account' : 'Welcome back',
       sub: up ? 'An email and a password. That’s all it takes.' : 'Sign in to pick up where you left off.',
       body: `<div class="oseg" id="o-tabs"><button data-t="in" class="${up ? '' : 'on'}">Sign in</button><button data-t="up" class="${up ? 'on' : ''}">Create account</button></div>
-        <label class="olab">Email</label><input class="oin" id="o-em" type="email" placeholder="you@school.edu" autocomplete="email" value="${h(ONB_ACCT.email)}">
+        <label class="olab">Email</label><input class="oin" id="o-em" type="email" placeholder="example@gmail.com" autocomplete="email" value="${h(ONB_ACCT.email)}">
         <label class="olab">Password</label><div class="opw"><input class="oin" id="o-pw" type="password" placeholder="${up ? 'At least 8 characters' : 'Your password'}" autocomplete="${up ? 'new-password' : 'current-password'}"><button type="button" id="o-showpw">Show</button></div>
         ${authMsg()}`,
       next: nextBtn(up ? 'Create account' : 'Sign in', 'o-auth-go'), skip: skipLnk('Maybe later', 'o-next') });

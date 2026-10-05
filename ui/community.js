@@ -53,7 +53,7 @@ function paintSignIn(email = '', mode = 'in') {
     <div class="authcard rise" style="--i:1" id="authcard">
       <div class="segmode authtabs" id="tabs"><button data-t="in" class="${mode === 'in' ? 'on' : ''}">Sign in</button><button data-t="up" class="${mode === 'up' ? 'on' : ''}">Create account</button></div>
       <label>Email</label>
-      <input id="em" type="email" placeholder="you@school.edu" autocomplete="email" value="${h(email)}">
+      <input id="em" type="email" placeholder="example@gmail.com" autocomplete="email" value="${h(email)}">
       <label style="margin-top:14px">Password</label>
       <div class="pwbox"><input id="pw" type="password" placeholder="${mode === 'up' ? 'At least 8 characters' : 'Your password'}" autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}"><button type="button" id="showpw">Show</button></div>
       <button class="btn wide" id="go">${mode === 'up' ? 'Create account' : 'Sign in'}</button>
