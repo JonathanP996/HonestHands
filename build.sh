@@ -102,7 +102,7 @@ SETKV() { /usr/libexec/PlistBuddy -c "Set :$1 $3" "$PL" 2>/dev/null || /usr/libe
 SETKV SUFeedURL string "https://honesthands-site.vercel.app/appcast.xml"
 SETKV SUPublicEDKey string "$(cat sparkle_public_key.txt)"
 SETKV SUEnableAutomaticChecks bool true
-SETKV SUScheduledCheckInterval integer 14400
+SETKV SUScheduledCheckInterval integer 3600
 BUILDNO_PL=$(python3 -c "import re;print(re.search(r'BUILD = (\d+)', open('version.py').read()).group(1))")
 VERSION_PL=$(python3 -c "import re;print(re.search(r\"VERSION = '([^']*)'\", open('version.py').read()).group(1))")
 SETKV CFBundleVersion string "$BUILDNO_PL"
