@@ -101,7 +101,7 @@ struct CardView: View {
     var hard: Bool { m.cmd.hard ?? false }
     // The alert is red; only "Edit my message" is green.
     var accent: Color { Color(red: 0.90, green: 0.36, blue: 0.34) }
-    var green: Color { Color(red: 0.42, green: 0.78, blue: 0.62) }
+    var green: Color { Color(red: 0.663, green: 0.714, blue: 0.125) }   // lime #A9B620
 
     func reveal(_ i: Int) -> some ViewModifier { Reveal(on: shown[i], delay: Double(i) * 0.05) }
 

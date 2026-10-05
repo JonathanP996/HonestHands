@@ -100,6 +100,7 @@ class App:
         self.menu_target = None
         self.quitting = False
         self._ext_last_ping = 0.0
+        self._ext_pings = {}        # browser key -> time of the extension's last check-in
 
     # ---------- window ----------
     def show_window(self):
@@ -152,7 +153,7 @@ class App:
         comp = NSImage.alloc().initWithSize_((W, H))
         comp.lockFocus()
         img.drawInRect_fromRect_operation_fraction_(NSMakeRect(0, 0, W, H), NSMakeRect(0, 0, W, H), 2, 1.0)
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.78, 0.63, 0.30, 1.0).set()
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.79, 0.60, 0.80, 1.0).set()
         NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(12.0, 12.0, 5.0, 5.0)).fill()
         comp.unlockFocus()
         comp.setTemplate_(False)  # keep the brass dot its real color
@@ -394,13 +395,20 @@ class App:
         return True
 
     # ----- browser-extension bridge -----
-    def note_extension_ping(self):
+    def note_extension_ping(self, browser=''):
         import time as _t
         self._ext_last_ping = _t.time()
+        if browser:
+            self._ext_pings[browser] = self._ext_last_ping
 
-    def extension_seen_recently(self):
+    def extension_seen_recently(self, browser=None):
+        """Has the extension checked in lately? (Within 90s, which tolerates the browser putting its worker to sleep.)
+        With a guarded browser chosen, only THAT browser's extension counts."""
         import time as _t
-        return (_t.time() - self._ext_last_ping) < 90  # present if pinged within 90s (tolerates MV3 worker sleep)
+        chosen = browser or self.store.data.get('browser')
+        if chosen:
+            return (_t.time() - self._ext_pings.get(chosen, 0)) < 90
+        return (_t.time() - self._ext_last_ping) < 90
 
     def extension_active(self):
         '''The extension acts ONLY when the app is running AND a session is on.'''

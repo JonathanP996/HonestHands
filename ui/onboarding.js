@@ -4,7 +4,7 @@
 let ONB = 0;
 let lastOnbSig = '';
 const ONB_FLAGS = { notifTried: false, notifOk: false, aiStarted: false, extPrepared: false };
-const ONB_STEPS = ['Welcome', 'Access', 'Handrail', 'Browser', 'Account', 'Class'];
+const ONB_STEPS = ['Welcome', 'Access', 'AI', 'Browser', 'Account', 'Class'];
 
 const OICO = {
   hand: '<path d="M8 11V5.5a1.3 1.3 0 0 1 2.6 0V10"/><path d="M10.6 10V4.4a1.3 1.3 0 0 1 2.6 0V10"/><path d="M13.2 10.2V5.4a1.3 1.3 0 0 1 2.6 0V12"/><path d="M15.8 12V8.6a1.3 1.3 0 0 1 2.5 0c0 3.2.1 4.4-.6 6.3-.8 2.2-2.4 3.6-4.8 3.6-2 0-3.2-.5-4.4-1.9l-2.7-3.2a1.35 1.35 0 0 1 1.9-1.9L7 11"/>',
@@ -22,7 +22,7 @@ const CHECK = '<svg class="ocheck" viewBox="0 0 24 24" fill="none" stroke="curre
 function onbStructSig() {
   const e = S.engine, p = S.perms || {};
   return [ONB, S.classes.length, e.state, e.ready, p.accessibility, p.watching, S.ext_live, ONB_FLAGS.notifTried, ONB_FLAGS.notifOk,
-          !!(S.extension && S.extension.installed_dir), S.cloud_user && S.cloud_user.signed_in].join('|');
+          !!(S.extension && S.extension.installed_dir), S.browser && S.browser.chosen, S.cloud_user && S.cloud_user.signed_in].join('|');
 }
 
 function onbProgress(i) {
@@ -78,23 +78,23 @@ function stepAccess() {
 
 function aiStatusHTML() {
   const e = S.engine;
-  if (e.ready) return `<div class="oready">${CHECK}<div><b>${h(e.name)} is ready</b><span>Running privately on your Mac.</span></div></div>`;
+  if (e.ready) return `<div class="oready">${CHECK}<div><b>The AI is ready</b><span>Running privately on your Mac.</span></div></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     const pr = e.progress, pct = pr && pr.total ? Math.round(100 * pr.done / pr.total) : 0;
     const gb = pr && pr.total ? `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB` : (e.message || 'Starting…');
     return `<div class="obig"><div class="opct">${e.state === 'starting' ? '<span class="spin big"></span>' : pct + '<small>%</small>'}</div>
       <div class="obar"><i style="width:${e.state === 'starting' ? 100 : pct}%"></i></div>
-      <div class="osmall">${e.state === 'starting' ? 'Loading ' + h(e.name) + '…' : gb}</div></div>`;
+      <div class="osmall">${e.state === 'starting' ? 'Loading the AI…' : gb}</div></div>`;
   }
   if (e.state === 'error') return `<div class="oerr"><b>That didn’t work.</b><span>${h(e.message)}</span><button class="btn" id="o-ai-go">Try again</button></div>`;
-  return `<div class="oerr calm"><span>${h(e.message || e.name + ' needs a one-time download.')}</span><button class="btn" id="o-ai-go">Download ${h(e.name)} (${e.size_gb} GB)</button></div>`;
+  return `<div class="oerr calm"><span>${h(e.message || 'The AI needs a one-time download.')}</span><button class="btn" id="o-ai-go">Download the AI (${e.size_gb} GB)</button></div>`;
 }
 function stepAI() {
   const e = S.engine;
   return `<section class="ocard rise">
     <div class="oicon">${oicon('chip')}</div>
-    <h1 class="otitle">Meet ${h(e.name)}, your built-in guard</h1>
-    <p class="olead">${h(e.name)} is the AI that reads each message against your class rules. It’s a one-time ${e.size_gb} GB download and it runs entirely on this Mac. Nothing you type is ever sent to a server.</p>
+    <h1 class="otitle">Your built-in AI guard</h1>
+    <p class="olead">The AI reads each message against your class rules. It’s a one-time ${e.size_gb} GB download and it runs entirely on this Mac. Nothing you type is ever sent to a server.</p>
     <div class="oai" id="o-ai">${aiStatusHTML()}</div>
     <p class="osmall">You can keep going while it downloads. It finishes in the background.</p>
     ${onbNav(true, 'Continue')}
@@ -102,23 +102,13 @@ function stepAI() {
 }
 
 function stepBrowser() {
-  const ext = S.extension || { browsers: [], installed_dir: '' };
-  const ready = !!ext.installed_dir, live = !!S.ext_live;
-  const br = (ext.browsers || []).filter(b => ['Google Chrome', 'Microsoft Edge', 'Brave'].includes(b));
+  const chosen = S.browser && S.browser.chosen;
   return `<section class="ocard rise">
     <div class="oicon">${oicon('globe')}</div>
-    <h1 class="otitle">Cover AI websites</h1>
-    <p class="olead">Sites like Gemini and ChatGPT hide their send button from your Mac, so a tiny browser extension fills the gap. It only works while HonestHands is running and a session is on.</p>
-    <div class="ostatusbar ${live ? 'ok' : ''}"><i></i>${live ? 'Connected. The extension just checked in.' : 'Waiting for the extension…'}</div>
-    <ol class="obig-steps">
-      <li class="${ready ? 'done' : ''}"><div><b>Copy the extension files</b><span>Puts them in a folder your browser can load.</span></div>
-        <button class="btn ${ready ? 'ghost' : ''}" id="o-extprep">${ready ? 'Copy again' : 'Copy files'}</button></li>
-      <li class="${ready ? '' : 'dim'}"><div><b>Open your browser’s extensions page</b><span>Then switch on <em>Developer mode</em> (top right).</span></div>
-        <div class="obtns">${br.length ? br.map(b => `<button class="btn ghost sm" data-obrowser="${h(b)}" ${ready ? '' : 'disabled'}>${h(b.replace('Google ', ''))}</button>`).join('') : '<span class="osmall">Open your browser’s Extensions page.</span>'}</div></li>
-      <li class="${ready ? '' : 'dim'}"><div><b>Click “Load unpacked” and pick the folder</b><span>It stays on after that.</span></div>
-        <button class="btn ghost sm" id="o-extopen" ${ready ? '' : 'disabled'}>Show the folder</button></li>
-    </ol>
-    <div class="onav"><button class="btn ghost big" id="o-back">Back</button><div class="onav-r"><a href="#" class="oskip" id="o-skipbrowser">Skip for now</a><button class="btn big" id="o-next">${live ? 'Continue' : 'Continue'}</button></div></div>
+    <h1 class="otitle">Pick your browser</h1>
+    <p class="olead">Sites like Gemini and ChatGPT hide their send button from your Mac, so a tiny extension covers the gap. Choose the one browser you’ll use for AI while you study.</p>
+    <div id="o-brpanel">${browserPanelHTML()}</div>
+    <div class="onav"><button class="btn ghost big" id="o-back">Back</button><div class="onav-r"><a href="#" class="oskip" id="o-skipbrowser">Skip for now</a><button class="btn big" id="o-next" ${chosen ? '' : 'disabled'}>Continue</button></div></div>
   </section>`;
 }
 
@@ -194,14 +184,8 @@ function wireOnboarding() {
   on('o-notif-no', async () => { await api().open_notification_settings(); });
   on('o-notif-open', async (e) => { e.preventDefault(); await api().open_notification_settings(); });
 
-  on('o-extprep', async () => {
-    const b = $$('o-extprep'); b.disabled = true; b.textContent = 'Copying…';
-    const r = await api().prepare_extension();
-    if (r.error) { toast(r.error); b.disabled = false; return; }
-    ONB_FLAGS.extPrepared = true; S = await api().state(); paintOnboarding(false);
-  });
-  on('o-extopen', () => api().open_extension_folder());
-  document.querySelectorAll('[data-obrowser]').forEach(b => b.onclick = () => api().open_browser_extensions_page(b.dataset.obrowser));
+  const bp = document.getElementById('o-brpanel');
+  if (bp) wireBrowserPanel(bp, () => paintOnboarding(false));
 
   on('o-acct-now', async () => { await api().finish_onboarding(); const r = await api().state(); S = r; TAB = 'community'; paint(); });
 }

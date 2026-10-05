@@ -66,6 +66,7 @@ from Quartz import (
 )
 
 import os
+import browsers
 import rules
 import threading
 
@@ -518,7 +519,7 @@ def current_prompt(retries=3):
         # The composer just cleared (sent). Use what we saw a moment ago.
         text = _LAST['text']
 
-    return {'where': where, 'text': text, 'pid': pid, 'app': name}
+    return {'where': where, 'text': text, 'pid': pid, 'app': name, 'bid': bid}
 
 
 def remember_typed():
@@ -695,6 +696,17 @@ class Guard:
                 self._release()
                 return True
 
+            chosen = self.store.data.get('browser') or ''
+            if p.get('bid') in BROWSERS and browsers.wrong_browser(chosen, p.get('bid')):
+                # AI websites are only allowed in the guarded browser during a session
+                nm = browsers.BROWSERS[chosen]['name']
+                msg = f'AI websites are only allowed in {nm} during a study session. Switch to {nm} to keep going.'
+                r = {'level': 'flag', 'hard': True, 'verdict': 'block', 'reason': msg, 'rule': 'Use your guarded browser', 'quote': '',
+                     'tip': f'Open this chat in {nm}.', 'reasons': [msg], 'source': 'browser'}
+                dbg('intercept: wrong browser', p.get('bid'), '-> BLOCK (guarded browser is', chosen + ')')
+                self.record(p, cls, asg, trigger, 'warned', r)
+                AppHelper.callAfter(self.show_warning, r, True, p, cls, asg)
+                return False
             r = self.ai_guard.cached(p['text'], cls, asg)
             if r is None and (rules.check(p['text'], cls, asg).get('evade') or not self.ai_guard.engine.ready()):
                 r = self.ai_guard.check(p['text'], cls, asg, p['where'])  # no AI, instant
@@ -764,7 +776,7 @@ class Guard:
         self.resend(trigger, loc)
 
     def is_hard(self, r):
-        return False   # one behaviour for everything: warn, with Edit / Send it now (logged)
+        return bool(r.get('hard'))   # only the wrong-browser block can't be overridden; everything else is warn + Send it now (logged)
 
     def act(self, r, p, cls, asg, trigger):
         if r['level'] in ('ok', 'note'):

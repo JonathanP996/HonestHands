@@ -7,10 +7,12 @@
 // worker on schedule even after it sleeps. No dependency on tabs or focus.
 
 const APP = 'http://127.0.0.1:7673';
+// Tell the app which browser this is, so it can tell the guarded browser from the others.
+const BROWSER = (() => { const ua = navigator.userAgent; if (/Edg\//.test(ua)) return 'edge'; if (/Firefox\//.test(ua)) return 'firefox'; if (/Chrome\//.test(ua)) return 'chrome'; return 'safari'; })();
 
 async function appStatus() {
   try {
-    const r = await fetch(APP + '/status', { method: 'GET' });
+    const r = await fetch(APP + '/status?b=' + BROWSER, { method: 'GET' });
     const j = await r.json();
     return { active: !!j.active, reachable: true };
   } catch (e) {
@@ -22,7 +24,7 @@ async function appCheck(text, site, url, images, nImages) {
   try {
     const r = await fetch(APP + '/check', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, site, url, images: images || [], nImages: nImages || 0 })
+      body: JSON.stringify({ text, site, url, images: images || [], nImages: nImages || 0, browser: BROWSER })
     });
     return await r.json();
   } catch (e) {

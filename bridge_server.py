@@ -3,6 +3,7 @@ The extension sends {text, site, url}; we return {verdict, reason, rule, quote, 
 All intelligence stays here in the app — the extension only reports and obeys."""
 import json
 import threading
+from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 7673
@@ -29,9 +30,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         # Health/status: is the guard live right now (app running + session on)?
-        if self.path == '/status':
+        if self.path.split('?')[0] == '/status':
             if _Handler.app:
-                _Handler.app.note_extension_ping()
+                _Handler.app.note_extension_ping(parse_qs(urlparse(self.path).query).get('b', [''])[0])
             active = _Handler.app.extension_active() if _Handler.app else False
             self._send({'ok': True, 'active': active})
         else:
@@ -49,7 +50,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
         app = _Handler.app
         if app is not None:
-            app.note_extension_ping()
+            app.note_extension_ping(str(data.get('browser') or ''))
         if app is None or not app.extension_active():
             # App off or no session -> the extension must do NOTHING.
             self._send({'active': False, 'verdict': 'allow'})

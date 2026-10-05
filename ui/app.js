@@ -46,7 +46,7 @@ async function refresh() { S = await api().state(); paint(); }
 
 // Fit the sidebar's vertical spacing to the window so all its items stay visible (width and icons scale freely).
 function fitRail() {
-  const rv = Math.max(1, Math.min(1.25, (window.innerHeight - 28) / 700));
+  const rv = Math.max(1, Math.min(1.06, (window.innerHeight - 28) / 700));
   document.documentElement.style.setProperty('--rv', rv.toFixed(3));
 }
 window.addEventListener('resize', fitRail); fitRail();
@@ -77,9 +77,9 @@ const TAB_META = {
 };
 function engineChipHTML() {
   const e = S.engine;
-  if (e.ready) return `<span class="chip good"><span class="d"></span>${h(e.name)} ready</span>`;
-  if (e.state === 'downloading' || e.state === 'starting') return `<span class="chip warn"><span class="spin"></span> ${h(e.name)}…</span>`;
-  return `<span class="chip warn"><span class="d"></span>${h(e.name)} not ready</span>`;
+  if (e.ready) return `<span class="chip good"><span class="d"></span>AI ready</span>`;
+  if (e.state === 'downloading' || e.state === 'starting') return `<span class="chip warn"><span class="spin"></span> AI…</span>`;
+  return `<span class="chip warn"><span class="d"></span>AI not ready</span>`;
 }
 function extChipHTML() {
   if (S.ext_live) return `<span class="chip good"><span class="d"></span>Extension on</span>`;
@@ -111,14 +111,14 @@ function engineBanner() {
   const e = S.engine;
   if (e.ready) return '';
   if (e.state === 'needs_setup')
-    return `<div class="banner warn"><div><b>${h(e.name)} needs a one-time setup.</b><div class="small">Until then, checking uses simple keyword rules only. It's a ${e.size_gb} GB download, and everything stays on this Mac.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
+    return `<div class="banner warn"><div><b>The AI needs a one-time setup.</b><div class="small">Until then, checking uses simple keyword rules only. It's a ${e.size_gb} GB download, and everything stays on this Mac.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     let bar = '';
     if (e.progress && e.progress.total) { const pct = Math.round(100 * e.progress.done / e.progress.total);
       bar = `<div class="progress"><div style="width:${pct}%"></div></div><div class="small">${h(e.progress.label)}: ${pct}% of ${(e.progress.total/1e9).toFixed(1)} GB</div>`; }
-    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message || 'Preparing ' + e.name + '…')}</b>${bar}</div></div>`;
+    return `<div class="banner warn"><div><b><span class="spin"></span> ${h(e.message || 'Preparing the AI…')}</b>${bar}</div></div>`;
   }
-  if (e.state === 'error') return `<div class="banner warn"><div><b>${h(e.name)} ran into a problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. You can retry in Settings.</div></div></div>`;
+  if (e.state === 'error') return `<div class="banner warn"><div><b>The AI ran into a problem.</b><div class="small">${h(e.message)} Checking falls back to keyword rules. You can retry in Settings.</div></div></div>`;
   return '';
 }
 
@@ -323,7 +323,7 @@ async function editClass(id) {
 }
 
 // ---- Activity log ----
-const COLORS = ['lav', 'mint', 'sun', 'sky', 'rose', 'peach', 'sage', 'sand'];
+const COLORS = ['orchid', 'olive', 'lav', 'mint', 'sun', 'sky', 'rose', 'peach', 'sage', 'sand'];
 let LOGPAGE = 1, LOGKIND = 'all';
 async function paintLog() {
   const m = $('#main');
@@ -372,13 +372,13 @@ async function paintLog() {
 function paintSettings() {
   const m = $('#main'); const e = S.engine;
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
-    <div class="card"><h2>${h(e.name)}</h2><p class="sub">The AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
+    <div class="card"><h2>The AI</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
       <div class="btnrow"><span class="chip ${e.ready ? 'good' : 'warn'}"><span class="d"></span>${e.ready ? 'Ready' : h(e.message || 'Not set up yet')}</span>
         ${e.ready ? '' : `<button class="btn" id="apply">${e.state === 'error' ? 'Try again' : 'Download &amp; set up'}</button>`}</div>
       <div id="eprog"></div>
     </div>
-    <div class="card"><h2>Browser extension</h2>
-      <p class="sub">For AI <b>websites</b> (Gemini, ChatGPT, Claude, and more), a small companion extension catches sends the Mac can't see on its own. It does nothing unless HonestHands is running and a session is active. Desktop AI apps are covered without it.</p>
+    <div class="card"><h2>Guarded browser</h2>
+      <p class="sub">Pick the one browser where AI websites are allowed during a study session, and set up its extension. The extension does nothing unless HonestHands is running and a session is active. The Claude and ChatGPT desktop apps are covered by the Mac app directly.</p>
       <div id="extBody"></div>
     </div>
     <div class="card"><h2>Accountability PIN</h2>
@@ -393,43 +393,13 @@ function paintSettings() {
         <button class="btn ghost sm" id="data">Open data folder</button></div>
       <p class="small muted mt">Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · The guard is ${S.perms.watching ? 'on' : 'off'}</p></div>
     </div>`;
-  // extension section
-  (function(){
-    const ext = S.extension || {browsers:[], installed_dir:''};
-    const box = document.getElementById('extBody');
-    if(!box) return;
-    const browsers = ext.browsers||[];
-    let html = '';
-    html += `<div class="btnrow" style="margin-bottom:10px">
-      <button class="btn" id="extPrep">${ext.installed_dir?'Re-copy extension files':'Set up the extension'}</button>
-      ${ext.installed_dir?'<button class="btn ghost" id="extOpen">Open extension folder</button>':''}
-    </div>`;
-    if(ext.installed_dir){
-      html += `<p class="small muted">Extension files are ready at:<br><code>${h(ext.installed_dir)}</code></p>`;
-      html += `<div class="step-note mt"><b>One-time enable (per browser):</b>
-        <ol class="small" style="margin:8px 0 0 18px;line-height:1.7">
-          <li>Open your browser's Extensions page ${browsers.length?'('+browsers.map(h).join(', ')+' detected)':''}</li>
-          <li>Turn on <b>Developer mode</b> (top-right)</li>
-          <li>Click <b>Load unpacked</b> and choose the folder above</li>
-        </ol></div>`;
-      html += `<div class="btnrow mt">` + browsers.filter(b=>['Google Chrome','Microsoft Edge','Brave'].includes(b))
-        .map(b=>`<button class="btn ghost sm" data-extbrowser="${h(b)}">Open ${h(b)} extensions</button>`).join('') + `</div>`;
-      html += `<p class="small muted mt">Chrome requires this one manual enable — no app can fully auto-install to a personal browser. After enabling once, it stays on.</p>`;
-    } else {
-      html += `<p class="small muted">Click “Set up the extension” to place the files, then enable it in your browser.</p>`;
-    }
-    box.innerHTML = html;
-    const prep = document.getElementById('extPrep');
-    if(prep) prep.onclick = async ()=>{ prep.disabled=true; const r=await api().prepare_extension();
-      if(r.error) toast(r.error); else { toast('Extension files ready.'); S=await api().state(); paint(); } };
-    const open = document.getElementById('extOpen');
-    if(open) open.onclick = ()=> api().open_extension_folder();
-    box.querySelectorAll('[data-extbrowser]').forEach(b=> b.onclick = ()=> api().open_browser_extensions_page(b.dataset.extbrowser));
-  })();
+  const extBox = document.getElementById('extBody');
+  extBox.innerHTML = browserPanelHTML();
+  wireBrowserPanel(extBox, () => paint());
 
   if ($('#apply')) $('#apply').onclick = async () => { $('#apply').disabled = true;
     const r = await api().setup_ai();
-    if (r.error) toast(r.error); else { S = r; toast('Getting ' + S.engine.name + ' ready…'); paint(); } };
+    if (r.error) toast(r.error); else { S = r; toast('Getting the AI ready…'); paint(); } };
   if ($('#pinrm')) $('#pinrm').onclick = async () => { const r = await api().remove_pin($('#op').value || '');
     if (r.error) toast(r.error); else { S = r; toast('PIN removed.'); paint(); } };
   $('#pinbtn').onclick = async () => { const r = await api().set_pin($('#op')?.value || '', $('#np').value);

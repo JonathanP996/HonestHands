@@ -10,13 +10,13 @@ import urllib.request
 
 from store import APP_DIR
 
-AI_NAME = 'Handrail'          # what the built-in AI is called in the app
+AI_NAME = 'AI'                # what the built-in AI is called in the app
 MODEL_DIR = APP_DIR / 'models'
 UA = {'User-Agent': 'HonestHands/1.0'}
 
 MODELS = {
     'small': {
-        'label': f'{AI_NAME}: private, runs on this Mac, about 2 GB',
+        'label': 'The built-in AI: private, runs on this Mac, about 2 GB',
         'file': 'qwen2.5-3b-instruct-q4_k_m.gguf',
         'url': 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf',
         'size': 2104932768,   # exact bytes: a file of any other size is incomplete or corrupt and gets downloaded again
@@ -85,9 +85,9 @@ class Engine:
     # ---------- start / stop ----------
     def autostart(self):
         if not llama_available():
-            self._set('needs_setup', f'{AI_NAME} can\'t run in this copy of the app (its engine is missing).')
+            self._set('needs_setup', 'The AI can\'t run in this copy of the app (its engine is missing).')
         elif not self.installed():
-            self._set('needs_setup', f'{AI_NAME} needs a one-time {self.status()["size_gb"]} GB download.')
+            self._set('needs_setup', f'The AI needs a one-time {self.status()["size_gb"]} GB download.')
         else:
             self.start()
 
@@ -115,7 +115,7 @@ class Engine:
 
     def _start_builtin(self, gen):
         if not llama_available():
-            raise RuntimeError(f'{AI_NAME}\'s engine isn\'t installed. Rebuild the app so it bundles the engine.')
+            raise RuntimeError('The AI\'s engine isn\'t installed. Rebuild the app so it bundles the engine.')
         if not self.installed():
             p = self.model_path()
             if p.exists() and p.stat().st_size > self.model()['size']:
@@ -123,7 +123,7 @@ class Engine:
             self._download_model(gen)
         if gen != self._gen:
             return
-        self._set('starting', f'Loading {AI_NAME}…')
+        self._set('starting', 'Loading the AI…')
         from llama_cpp import Llama
         llama = Llama(
             model_path=str(self.model_path()),
@@ -134,7 +134,7 @@ class Engine:
         if gen != self._gen:
             return
         self.llama = llama
-        self._set('ready', f'{AI_NAME} is ready.')
+        self._set('ready', 'The AI is ready.')
 
     def _download(self, url, dest, label, gen):
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -162,8 +162,8 @@ class Engine:
         part.replace(dest)
 
     def _download_model(self, gen):
-        self._set('downloading', f'Downloading {AI_NAME} (one time).')
-        self._download(self.model()['url'], self.model_path(), AI_NAME, gen)
+        self._set('downloading', 'Downloading the AI (one time).')
+        self._download(self.model()['url'], self.model_path(), 'AI model', gen)
 
     # ---------- asking it questions ----------
     def chat_raw(self, system, user, timeout=20, max_tokens=200):

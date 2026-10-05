@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2a6150"/><stop offset="1" stop-color="#163a2f"/>
+      <stop offset="0" stop-color="#2B453D"/><stop offset="1" stop-color="#14221E"/>
     </linearGradient>
     <filter id="marble"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="4" seed="9"/>
       <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 -0.22"/></filter>
     <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e7d29a"/><stop offset="0.5" stop-color="#c6a24c"/><stop offset="1" stop-color="#9c7a34"/>
+      <stop offset="0" stop-color="#EBD3EC"/><stop offset="0.55" stop-color="#C99ACB"/><stop offset="1" stop-color="#8B5B7E"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="232" fill="url(#g)"/>

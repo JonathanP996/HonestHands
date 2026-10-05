@@ -4,7 +4,7 @@
 
 A Mac menu-bar app that checks every message you are about to send to an AI against **your class's own rules** and warns you first, so AI stays a tutor and not a shortcut. You can always send anyway; it is just recorded. Optionally, pair up with a friend or mentor who sees when you lock in and any prompt you send despite a warning.
 
-The AI that does the checking is **Handrail**, a small model that runs on your Mac. What you type never leaves it.
+The AI that does the checking is a small built-in model that runs on your Mac. What you type never leaves it.
 
 ## How it works
 
@@ -32,7 +32,7 @@ python3 main.py
 
 Each new Terminal window: `cd` here and `source .venv/bin/activate` again before `python3 main.py`.
 
-The first launch walks you through setup: macOS **Accessibility** permission (so the guard can read and hold a send), an optional test notification, the one-time ~2 GB download of Handrail, the browser extension, an optional account, and your first class.
+The first launch walks you through setup: macOS **Accessibility** permission (so the guard can read and hold a send), an optional test notification, the one-time ~2 GB download of the AI, your browser and its extension, an optional account, and your first class.
 
 The popup is a small native Swift program. Build it once with `cd overlay/mac && swift build -c release` (the build script does this for you). Without it the app falls back to a simpler built-in panel.
 
@@ -52,11 +52,21 @@ This produces **HonestHands.app** and **HonestHands.dmg**. First launch: right-c
 - **History** — your sessions as large blocks, grouped by day. Click one to see every prompt from that session.
 - **Insights** — clean rate, time locked in, where you use AI, a streak calendar, time per class, and your week.
 - **Community** — create an account (email and password), then invite people by handle. One-way or mutual. They see only: prompts you sent despite a warning (with their text), session times, daily counts, and when the app last checked in. Never your syllabi, assignments, or the text of clean or flagged messages. Turn "Share my activity" off at any time.
-- **Settings** — Handrail's status, the browser extension, an optional accountability PIN (a friend sets it, then ending a session, deleting a class or clearing the log needs it), and permissions.
+- **Settings** — the AI's status, your guarded browser and its extension, an optional accountability PIN (a friend sets it, then ending a session, deleting a class or clearing the log needs it), and permissions.
 
-## Browser extension (AI websites and pictures)
+## Your guarded browser (and the extension)
 
-Some AI websites hide their send button from macOS, and only the page itself can see attached pictures, so a small companion extension covers them. It does nothing unless HonestHands is running and a session is on. All rules, judging and logging stay in the app. Set it up in the first-run flow or in **Settings › Browser extension**: copy the files, open your browser's Extensions page, turn on Developer mode, and **Load unpacked**. After updating the app, click the refresh icon on the extension and reload your AI tabs.
+During a study session you pick **one browser** for AI: Chrome, Edge, Firefox or Safari. **AI websites in every other browser are blocked** (the send is held with a "switch to <your browser>" message), so there is no easy way around the guard. The Claude and ChatGPT desktop apps are covered by the Mac app directly.
+
+Some AI websites hide their send button from macOS, and only the page itself can see attached pictures, so a small extension runs in your chosen browser. It does nothing unless HonestHands is running and a session is on; all rules, judging and logging stay in the app.
+
+| Browser | How it is installed |
+| --- | --- |
+| Chrome, Edge | The same extension (Manifest V3). Copy the files, open the extensions page, Developer mode, **Load unpacked**. |
+| Firefox | Same code with a Manifest V2 file the app generates. **Load Temporary Add-on** on `about:debugging`. Firefox forgets temporary add-ons when it quits, so re-load it after a restart until we publish a signed one. |
+| Safari | The app builds a small helper app with Xcode (free) and Apple's converter. Open it once, then Safari › Settings › Advanced › Show features for web developers, Develop › Allow Unsigned Extensions, and switch the extension on under Settings › Extensions. |
+
+Set it up in the first-run flow or in **Settings › Guarded browser**. After updating the app, refresh the extension in your browser and reload your AI tabs.
 
 ## Community setup (Supabase)
 
@@ -68,6 +78,7 @@ Accounts, partners and the feed use a Supabase project. The database layout and 
 python3 tests/run_guard_tests.py   # the real guard on ~46 exact messages; appends to tests/results.jsonl
 python3 tests/test_homework.py     # finding which homework question a message resembles
 python3 tests/test_images.py       # pictures read on-device and judged
+python3 tests/test_browser_block.py # AI sites are blocked in every browser except the guarded one
 python3 tests/test_cloud_mock.py   # accounts, partners, sync, against an in-memory stand-in for Supabase
 ```
 
@@ -83,6 +94,8 @@ When the guard gets something wrong, paste the exact message into `tests/guard_c
 
 - Honor system plus accountability: someone determined can quit the app. A partner sees "Quiet since…" when check-ins stop.
 - Pictures are read only through the browser extension, and only if the site shows a thumbnail in the page. The Claude and ChatGPT desktop apps are text-only.
+- The other-browser block holds sends; it does not stop you reading an AI site in another browser, and a system-wide web block would need administrator access.
+- Firefox's extension is temporary until we publish a signed one; Safari's is for local use until we sign it with a paid Apple developer account.
 - Handwriting and photos with no readable text are flagged only when the policy forbids sharing questions or your work.
 - Ask Gemini can also read the open web page; a message like "answer the question on this page" does not mention the homework, so the guard cannot match it.
 - It covers desktop AI apps and AI websites on a Mac, not phones or AI built into other apps yet.
@@ -94,7 +107,8 @@ When the guard gets something wrong, paste the exact message into `tests/guard_c
 | `main.py` | App entry, menu bar, windows |
 | `watcher.py` | Reads your message through Accessibility and holds the send |
 | `ai_guard.py` | The guard: checklist, homework matching, pictures |
-| `engine.py` | Handrail: the on-device model |
+| `engine.py` | The on-device AI model |
+| `browsers.py`, `extensions.py` | The supported browsers; building the extension for each |
 | `homework.py` | Finds which homework question a message resembles |
 | `ocr.py` | Reads text in pictures (Apple Vision) |
 | `distill.py`, `docs.py`, `rules.py` | Pulling the AI rules out of a syllabus; keyword fallback |

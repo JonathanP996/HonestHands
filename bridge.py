@@ -3,7 +3,9 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 
+import browsers as browserlib
 import cloud as cloudlib
+import extensions
 import distill
 import docs
 import rules
@@ -109,6 +111,7 @@ class Api:
             'has_pin': bool(s.data.get('pin')),
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
+            'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'engine': self._app.engine.status(),
             'perms': {'accessibility': watcher.has_accessibility(), 'watching': self._app.guard.watching},
             'ext_live': self._app.extension_seen_recently(),
@@ -158,43 +161,36 @@ class Api:
         return self.state()
 
     # ---------- browser extension ----------
+    def _chosen(self):
+        return self._store.data.get('browser') or ''
+
     def _ext_dir(self):
-        from store import APP_DIR
-        return APP_DIR / 'extension'
+        key = self._chosen() or 'chrome'
+        return extensions.dest_for(browserlib.BROWSERS[key]['kind'])
 
     def _extension_status(self):
-        import shutil
-        from pathlib import Path
-        home = Path.home()
-        browsers = []
-        checks = [
-            ('Google Chrome', home / 'Library/Application Support/Google/Chrome'),
-            ('Microsoft Edge', home / 'Library/Application Support/Microsoft Edge'),
-            ('Brave', home / 'Library/Application Support/BraveSoftware/Brave-Browser'),
-            ('Arc', home / 'Library/Application Support/Arc'),
-            ('Vivaldi', home / 'Library/Application Support/Vivaldi'),
-        ]
-        for name, path in checks:
-            if path.exists():
-                browsers.append(name)
-        return {'installed_dir': str(self._ext_dir()) if self._ext_dir().exists() else '',
-                'browsers': browsers}
+        d = self._ext_dir()
+        key = self._chosen()
+        have = d.exists() and (any(d.glob('*.app')) if key == 'safari' else (d / 'manifest.json').exists())
+        return {'installed_dir': str(d) if have else '', 'kind': browserlib.BROWSERS[key]['kind'] if key else ''}
 
-    def prepare_extension(self):
-        """Copy the bundled extension to a stable folder the user can load into their browser."""
-        import shutil, sys, os
-        from pathlib import Path
-        dest = self._ext_dir()
-        # source: alongside the app (bundled) or in the dev folder
-        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        src = Path(base) / 'extension'
+    def set_browser(self, key):
+        if key not in browserlib.BROWSERS:
+            return _err('Pick one of the listed browsers.')
+        self._store.data['browser'] = key
+        self._store.save()
+        return self.state()
+
+    def prepare_extension(self, key=None):
+        """Builds the extension for the chosen browser (a folder for Chrome/Edge/Firefox, a small helper app for Safari)."""
+        key = key or self._chosen()
+        if key not in browserlib.BROWSERS:
+            return _err('Choose your browser first.')
         try:
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest)
-            return {'ok': True, 'dir': str(dest)}
+            r = extensions.prepare(browserlib.BROWSERS[key]['kind'])
+            return dict(r, ok=True)
         except Exception as e:
-            return {'error': str(e)}
+            return _err(e)
 
     def open_extension_folder(self):
         import subprocess
@@ -204,23 +200,27 @@ class Api:
         subprocess.Popen(['open', str(d)])
         return True
 
-    def open_browser_extensions_page(self, browser):
+    def launch_extension_app(self):
         import subprocess
-        pages = {
-            'Google Chrome': 'com.google.Chrome',
-            'Microsoft Edge': 'com.microsoft.edgemac',
-            'Brave': 'com.brave.Browser',
-        }
-        # Best-effort: open the browser to its extensions page.
-        urls = {'Google Chrome': 'chrome://extensions', 'Microsoft Edge': 'edge://extensions',
-                'Brave': 'brave://extensions'}
-        app_ids = pages.get(browser)
+        d = self._ext_dir()
+        app = next(iter(d.glob('*.app')), None) if d.exists() else None
+        if not app:
+            return _err('Build the Safari extension first.')
+        subprocess.Popen(['open', str(app)])
+        return True
+
+    def open_browser_extensions_page(self, key=None):
+        """Opens the chosen browser on its extensions page (Safari has none to deep-link, so it just opens)."""
+        import subprocess
+        key = key if key in browserlib.BROWSERS else self._chosen()
+        if key not in browserlib.BROWSERS:
+            return _err('Choose your browser first.')
+        info = browserlib.BROWSERS[key]
         try:
-            if app_ids:
-                subprocess.Popen(['open', '-b', app_ids, urls.get(browser, 'chrome://extensions')])
+            subprocess.Popen(['open', '-b', info['bundle']] + ([info['page']] if info['page'] else []))
             return True
         except Exception as e:
-            return {'error': str(e)}
+            return _err(e)
 
     # ---------- documents ----------
     def choose_file(self):

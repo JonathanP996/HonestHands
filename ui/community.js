@@ -2,7 +2,7 @@
 // Loaded before app.js; uses its globals (api, h, el, $, toast, modal, closeModal, TAB, fmtLong) and pages.js (countTo, nextFrame).
 
 let COMM_TIMER = null;
-const AV_HUES = [12, 38, 150, 190, 215, 262, 330];
+const AV_HUES = [293, 315, 65, 160, 200, 340];
 const avHue = (s) => AV_HUES[[...String(s || '?')].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_HUES.length];
 const avatar = (name, id, size = 44) => `<span class="avatar" style="--hue:${avHue(id || name)};--s:${size}px">${h((name || '?').trim()[0] || '?')}</span>`;
 
