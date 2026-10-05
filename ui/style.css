@@ -860,3 +860,6 @@ body.morphing .sb-in{animation:none;opacity:0}
 .bubble.mine{align-self:flex-end;background:var(--green);color:var(--green-ink);border-bottom-right-radius:6px}
 .bubble.theirs{align-self:flex-start;background:var(--panel-2);color:var(--ink);border-bottom-left-radius:6px}
 .chatbar{display:flex;gap:10px;align-items:flex-end;padding-top:12px;border-top:1px solid var(--line)}.chatbar textarea{flex:1;resize:none;max-height:120px}
+
+.durhint{margin:10px 2px 0;font-size:13px;color:var(--muted)}
+.lockbox.soft{background:var(--panel-2);border-color:var(--line)}

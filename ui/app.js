@@ -194,7 +194,7 @@ function paintHome() {
     return;
   }
   const TUTOR = S.tutor_mode, ALL = [TUTOR, ...S.classes];
-  let selC = (S.classes[0] || TUTOR).id, selA = '', selMin = 0, customMin = 30;
+  let selC = (S.classes[0] || TUTOR).id, selA = '', selMin = 30, customMin = 45;
   m.innerHTML = `<div class="wrap sess">${permBanner()}${engineBanner()}
     <div class="sess-hero"><div><h1>Start a study session</h1>
       <p class="sub" style="margin:6px 0 0">Pick what you're working on. The guard stays idle until you do.</p></div></div>
@@ -204,6 +204,7 @@ function paintHome() {
     <div class="seg" id="ag"></div></div>
     <div class="step"><span class="n">${'3'}</span>How long?</div>
     <div class="seg dur" id="dur"></div>
+    <p class="durhint">We encourage using a timer for accountability’s sake. It’s what makes this stick.</p>
     <div id="durnote"></div>
     ${S.classes.length ? '' : `<p class="small muted" style="margin-top:18px">Want your own syllabus rules? <a href="#" onclick="TAB='classes';paint();return false">Add a class</a> any time.</p>`}
     <div class="startbar"><div class="sum" id="sum"></div><button class="btn" id="go">Start session</button></div></div>`;
@@ -222,14 +223,14 @@ function paintHome() {
     m.querySelectorAll('.pick').forEach(b => b.onclick = () => { selC = b.dataset.c; paintPicks(); });
     m.querySelectorAll('#ag button').forEach(b => b.onclick = () => { selA = b.dataset.a; paintPicks(); });
   };
-  const DURS = [[0, 'No timer'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [120, '2 hours'], [-1, 'Custom']];
+  const DURS = [[30, '30 min'], [60, '1 hour'], [120, '2 hours'], [-1, 'Custom'], [0, 'No timer']];
   const minutes = () => selMin === -1 ? Math.max(1, Math.min(720, Math.round(+customMin) || 1)) : selMin;
   const paintDur = () => {
     $('#dur').innerHTML = DURS.map(([v, l]) => `<button class="${selMin === v ? 'on' : ''}" data-d="${v}">${l}</button>`).join('') +
       (selMin === -1 ? `<span class="durcustom"><input id="cmin" type="number" min="1" max="720" value="${customMin}"><span>minutes</span></span>` : '');
     const mins = minutes(), ex = S.exit || { pin: false, friends: 0 }, can = ex.pin || ex.friends > 0;
     const until = new Date(Date.now() + mins * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    $('#durnote').innerHTML = !mins ? `<p class="small muted" style="margin-top:12px">No timer: you can end the session whenever you like${ex.pin ? ' (with your PIN)' : ''}.</p>`
+    $('#durnote').innerHTML = !mins ? `<div class="lockbox soft"><b>No timer</b><span>You can end the session whenever you like${ex.pin ? ' (with your PIN)' : ''}. We encourage using a timer for accountability's sake: it's what stops “just five more minutes”, and it lets a friend hold you to it.</span></div>`
       : `<div class="lockbox ${can ? '' : 'warn'}"><b>Locked in until ${until}.</b>
           <span>You won't be able to quit or end it early. The only ways out: ${ex.pin ? 'your <b>PIN</b>' : ''}${ex.pin && ex.friends ? ' or ' : ''}${ex.friends ? `a <b>friend</b> releasing you (${ex.friends} can)` : ''}${can ? '.' : ''}</span>
           ${can ? '' : `<span>You don't have a way out yet, and a timed lock needs one for emergencies.</span><div class="btnrow" style="margin-top:8px">
