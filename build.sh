@@ -167,9 +167,24 @@ else
 fi
 codesign --verify --deep --strict "$APPDIR"
 
-notarize() {   # notarize <file>: waits for Apple's answer; stops the build if it is rejected
-  xcrun notarytool submit "$1" --keychain-profile "${NOTARY_PROFILE:-HonestHands}" --wait 2>&1 | tee /tmp/hh_notary.txt
-  grep -q "status: Accepted" /tmp/hh_notary.txt || { echo "Notarization was not accepted. Details: xcrun notarytool log <id> --keychain-profile ${NOTARY_PROFILE:-HonestHands}"; exit 1; }
+notarize() {   # notarize <file>: waits for Apple's answer (retrying if the connection hiccups); stops the build if rejected
+  P="${NOTARY_PROFILE:-HonestHands}"
+  NID=""
+  for t in 1 2 3 4 5; do
+    NID=$(xcrun notarytool submit "$1" --keychain-profile "$P" --no-wait --output-format json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])" 2>/dev/null)
+    [ -n "$NID" ] && break; sleep 10
+  done
+  [ -n "$NID" ] || { echo "Could not send the file to Apple."; exit 1; }
+  echo "   submitted $NID"
+  for i in $(seq 1 90); do
+    ST=$(xcrun notarytool info "$NID" --keychain-profile "$P" --output-format json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+    case "$ST" in
+      Accepted) echo "   status: Accepted"; return 0;;
+      Invalid|Rejected) echo "Notarization was not accepted ($ST). Details: xcrun notarytool log $NID --keychain-profile $P"; exit 1;;
+    esac
+    sleep 15
+  done
+  echo "Notarization took too long. Check: xcrun notarytool info $NID --keychain-profile $P"; exit 1
 }
 CAN_NOTARIZE=0
 if [ -n "$IDENT" ] && xcrun notarytool history --keychain-profile "${NOTARY_PROFILE:-HonestHands}" >/dev/null 2>&1; then CAN_NOTARIZE=1; fi
