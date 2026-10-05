@@ -87,6 +87,27 @@ PLIST="dist/$APP.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string 'Needed to check your AI messages against your class rules.'" "$PLIST" 2>/dev/null || true
 
+# Automatic updates: embed Sparkle and tell the app where to look (the website's appcast.xml) and which key signs updates.
+if [ ! -d vendor/Sparkle.framework ]; then
+  echo "==> Fetching Sparkle"
+  mkdir -p vendor/dl && TAG=$(curl -s https://api.github.com/repos/sparkle-project/Sparkle/releases/latest | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
+  curl -sL -o vendor/dl/s.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/$TAG/Sparkle-$TAG.tar.xz" && tar -xf vendor/dl/s.tar.xz -C vendor/dl
+  cp -R vendor/dl/Sparkle.framework vendor/ && mkdir -p vendor/sparkle-bin && cp vendor/dl/bin/generate_keys vendor/dl/bin/sign_update vendor/sparkle-bin/
+fi
+mkdir -p "dist/$APP.app/Contents/Frameworks"
+rm -rf "dist/$APP.app/Contents/Frameworks/Sparkle.framework"
+cp -R vendor/Sparkle.framework "dist/$APP.app/Contents/Frameworks/"
+PL="dist/$APP.app/Contents/Info.plist"
+SETKV() { /usr/libexec/PlistBuddy -c "Set :$1 $3" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $2 $3" "$PL"; }
+SETKV SUFeedURL string "https://honesthands-site.vercel.app/appcast.xml"
+SETKV SUPublicEDKey string "$(cat sparkle_public_key.txt)"
+SETKV SUEnableAutomaticChecks bool true
+SETKV SUScheduledCheckInterval integer 14400
+BUILDNO_PL=$(python3 -c "import re;print(re.search(r'BUILD = (\d+)', open('version.py').read()).group(1))")
+VERSION_PL=$(python3 -c "import re;print(re.search(r\"VERSION = '([^']*)'\", open('version.py').read()).group(1))")
+SETKV CFBundleVersion string "$BUILDNO_PL"
+SETKV CFBundleShortVersionString string "$VERSION_PL"
+
 # Safari's extension has to live inside a signed app. Build it with Apple's converter + Xcode and put it inside HonestHands.app, so
 # Safari users only switch it on (no Xcode, no "Allow Unsigned Extensions").
 SAFARI_APPEX=""
@@ -131,6 +152,10 @@ if [ -n "$IDENT" ]; then
   find "$APPDIR" -type f -not -path "*/PlugIns/*" \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) | while read -r f; do
     file -b "$f" | grep -q "Mach-O" && codesign --force --options runtime --timestamp --entitlements entitlements.plist --sign "$IDENT" "$f"
   done
+  SPK="$APPDIR/Contents/Frameworks/Sparkle.framework/Versions/B"       # Sparkle's own helpers, innermost first
+  for X in "$SPK"/XPCServices/*.xpc "$SPK/Updater.app"; do [ -d "$X" ] && codesign --force --options runtime --timestamp --sign "$IDENT" "$X"; done
+  codesign --force --options runtime --timestamp --sign "$IDENT" "$SPK/Autoupdate"
+  codesign --force --options runtime --timestamp --sign "$IDENT" "$APPDIR/Contents/Frameworks/Sparkle.framework"
   for X in "$APPDIR"/Contents/PlugIns/*.appex; do      # the Safari extension is sandboxed: its own entitlements, signed before the app
     [ -d "$X" ] && codesign --force --options runtime --timestamp --entitlements safari.entitlements --sign "$IDENT" "$X"
   done
@@ -173,6 +198,33 @@ if [ -n "$IDENT" ]; then
   fi
 fi
 
+python3 - <<'PY'
+# The appcast is what installed copies read to find the newest build; its signature must match the final .dmg byte for byte.
+import re, os, subprocess, email.utils, time
+s = open("version.py").read()
+build = re.search(r"BUILD = (\d+)", s).group(1); ver = re.search(r"VERSION = '([^']*)'", s).group(1)
+site = os.path.join("..", "honesthands-site")
+if os.path.isdir(site) and os.path.exists("vendor/sparkle-bin/sign_update"):
+    out = subprocess.run(["vendor/sparkle-bin/sign_update", "HonestHands.dmg"], capture_output=True, text=True).stdout.strip()
+    notes = os.environ.get("UPDATE_NOTES", "") or "Improvements and fixes."
+    open(os.path.join(site, "appcast.xml"), "w").write(f"""<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>HonestHands</title>
+    <item>
+      <title>Version {ver} (build {build})</title>
+      <pubDate>{email.utils.formatdate(time.time())}</pubDate>
+      <sparkle:version>{build}</sparkle:version>
+      <sparkle:shortVersionString>{ver}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[{notes}]]></description>
+      <enclosure url="https://honesthands-site.vercel.app/HonestHands.dmg" type="application/octet-stream" {out}/>
+    </item>
+  </channel>
+</rss>
+""")
+    print("   appcast for build", build)
+PY
 echo ""
 echo "==> Done:  $(pwd)/$APP.dmg"
 echo "Open it, drag the app to Applications, and launch it."

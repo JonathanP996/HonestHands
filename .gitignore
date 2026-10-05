@@ -25,3 +25,4 @@ models/
 
 overlay/mac/.build/
 overlay/bin/
+vendor/

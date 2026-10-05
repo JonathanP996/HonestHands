@@ -7,6 +7,7 @@ import browsers as browserlib
 import cloud as cloudlib
 import extensions
 import keepalive
+import sparkle
 import version
 import distill
 import docs
@@ -116,7 +117,7 @@ class Api:
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
             'theme': s.data.get('theme', 'system'),
-            'version': version.VERSION, 'update': self._app.updater.available(),
+            'version': version.VERSION, 'update': self._app.updater.available(), 'auto_updates': sparkle.active(),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),
             'engine': self._app.engine.status(),
@@ -671,6 +672,8 @@ class Api:
 
     def check_update(self):
         """Settings > Check for updates: look right now."""
+        if sparkle.check_now():
+            return self.state()                            # Sparkle shows its own window
         self._app.updater.check_now()
         return self.state()
 

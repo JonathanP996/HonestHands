@@ -467,7 +467,7 @@ function applyTheme(mode) {
 function paintSettings() {
   const m = $('#main'); const e = S.engine;
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
-    <div class="card"><h2>About</h2><p class="sub">HonestHands ${h(S.version || '')}. ${S.update ? 'A newer version is ready.' : 'You have the latest version.'}</p>
+    <div class="card"><h2>About</h2><p class="sub">HonestHands ${h(S.version || '')}. ${S.auto_updates ? 'Updates install automatically when you say yes.' : S.update ? 'A newer version is ready.' : 'You have the latest version.'}</p>
       <div class="btnrow"><button class="btn ghost" id="chkup">Check for updates</button>${S.update ? '<button class="btn" id="getup">Download update</button>' : ''}</div></div>
     <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my Mac” follows your system setting.</p>
       <div class="segmode themeseg" id="themeseg">${[['system', 'Match my Mac'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -518,7 +518,7 @@ function paintSettings() {
     const r = await api().set_theme(b.dataset.th); if (r && !r.error) { S = r; applyTheme(S.theme); }
     $('#themeseg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   });
-  $('#chkup').onclick = async () => { $('#chkup').disabled = true; const r = await api().check_update(); $('#chkup').disabled = false; if (r && !r.error) { S = r; toast(S.update ? 'A new version is ready.' : 'You have the latest version.'); paintSettings(); paintUpdateBar(); } };
+  $('#chkup').onclick = async () => { $('#chkup').disabled = true; const r = await api().check_update(); $('#chkup').disabled = false; if (r && !r.error) { S = r; if (!S.auto_updates) toast(S.update ? 'A new version is ready.' : 'You have the latest version.'); paintSettings(); paintUpdateBar(); } };
   if ($('#getup')) $('#getup').onclick = () => api().open_update();
   $('#acc').onclick = () => api().open_accessibility_settings();
   $('#data').onclick = () => api().open_data_folder();
