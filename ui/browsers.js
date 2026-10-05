@@ -37,7 +37,7 @@ function browserPanelHTML() {
       <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
   else if (kind === 'safari' && ext.bundled) steps = `
     <li class="done"><div><b>The Safari extension is built in</b><span>Nothing to download or build. Keep HonestHands in your Applications folder.</span></div></li>
-    <li><div><b>Turn it on in Safari</b><span>Tick <em>HonestHands Extension</em>, then allow it on the AI sites (Always Allow, or Always Allow on Every Website).</span></div>
+    <li><div><b>Turn it on in Safari</b><span>Tick <em>HonestHands Guard</em> in the list. Then, to allow every AI site at once: in the website list, click one row, press <b>⌘A</b> and click <b>Remove</b>, then set <em>When visiting other websites</em> (below the list) to <b>Allow</b>. Or choose Allow on each site one by one.</span></div>
       <button class="btn" data-act="page">Open Safari’s switch</button></li>`;
   else if (kind === 'safari') steps = `
     <li class="${ready ? 'done' : ''}"><div><b>Build the Safari extension</b><span>Takes about 15 seconds. Needs Xcode installed (free in the App Store).</span></div>
