@@ -9,6 +9,7 @@ How the big proctoring tools do it, and what is realistic here:
 """
 import os
 import threading
+import time
 
 import browsers
 
@@ -37,6 +38,7 @@ class SessionLock:
         self.last_ok = None            # the last allowed app that was in front: where to put you back
         self._observer = None
         self.blocked = 0
+        self._last_msg = {}            # app name -> when we last told them (so repeated tries don't stack popups)
 
     def active(self):
         cls, _ = self.store.session_targets()
@@ -47,6 +49,33 @@ class SessionLock:
         from AppKit import NSWorkspace, NSWorkspaceDidActivateApplicationNotification
         center = NSWorkspace.sharedWorkspace().notificationCenter()
         self._observer = center.addObserverForName_object_queue_usingBlock_(NSWorkspaceDidActivateApplicationNotification, None, None, self._activated)
+        threading.Thread(target=self._watch_front, daemon=True).start()
+
+    def _watch_front(self):
+        """The activation notification can be missed (an app already in front on another screen or Space, a window brought up
+        another way). So also look at what is in front a couple of times a second while a session is on."""
+        from AppKit import NSWorkspace
+        from PyObjCTools import AppHelper
+        while True:
+            time.sleep(0.5)
+            try:
+                if not self.active():
+                    continue
+                cfg = self.store.data.get('lock') or {}
+                chosen = self.store.data.get('browser') or ''
+                front = NSWorkspace.sharedWorkspace().frontmostApplication()
+                for app in NSWorkspace.sharedWorkspace().runningApplications():
+                    if app.activationPolicy() != 0 or app.processIdentifier() == os.getpid():
+                        continue                                   # only real apps with windows
+                    bid, name = app.bundleIdentifier(), str(app.localizedName() or 'That app')
+                    if not blocked_reason(bid, name, cfg, chosen, self.is_ai_app):
+                        continue
+                    if front is not None and app.processIdentifier() == front.processIdentifier():
+                        AppHelper.callAfter(self.handle, bid, name, app)     # in front: turn them back, with the note
+                    elif not app.isHidden():
+                        AppHelper.callAfter(app.hide)                        # open behind something else: still out of sight
+            except Exception as e:
+                print('[lock] front check problem:', e, flush=True)
 
     def _activated(self, note):
         try:
@@ -69,7 +98,20 @@ class SessionLock:
         except Exception:
             pass
         self._return_to_work()
-        self.on_block(reason, name)
+        if time.time() - self._last_msg.get(name, 0) > 4:
+            self._last_msg[name] = time.time()
+            self.on_block(reason, name)
+        # still in front a moment later (it ignored the first hide)? hide it again
+        threading.Timer(0.35, self._recheck, args=(app,)).start()
+
+    def _recheck(self, app):
+        try:
+            if not app.isHidden():
+                from PyObjCTools import AppHelper
+                AppHelper.callAfter(app.hide)
+                AppHelper.callAfter(self._return_to_work)
+        except Exception:
+            pass
 
     def _return_to_work(self):
         """Bring the guarded browser (or wherever you were) back to the front."""
