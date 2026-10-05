@@ -8,6 +8,7 @@ import uuid
 _center = None
 _delegate = None
 _on_click = None
+_granted = None            # None until macOS answers the permission question
 
 
 def available():
@@ -45,8 +46,11 @@ def setup(on_click):
         _delegate = Delegate.alloc().init()
         _center = UN.UNUserNotificationCenter.currentNotificationCenter()
         _center.setDelegate_(_delegate)
+        def answered(granted, err):
+            global _granted
+            _granted = bool(granted)
         _center.requestAuthorizationWithOptions_completionHandler_(
-            UN.UNAuthorizationOptionAlert | UN.UNAuthorizationOptionSound | UN.UNAuthorizationOptionBadge, lambda granted, err: None)
+            UN.UNAuthorizationOptionAlert | UN.UNAuthorizationOptionSound | UN.UNAuthorizationOptionBadge, answered)
         return True
     except Exception as e:
         print('[notify] could not start the app\'s own alerts:', e, flush=True)
@@ -56,8 +60,8 @@ def setup(on_click):
 
 def send(title, message, action=''):
     """True if it went out as one of the app's own alerts."""
-    if _center is None:
-        return False
+    if _center is None or _granted is False:
+        return False                      # not started, or they said no: the caller falls back to the old style alert
     try:
         import UserNotifications as UN
         c = UN.UNMutableNotificationContent.alloc().init()
