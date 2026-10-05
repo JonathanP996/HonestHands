@@ -1062,3 +1062,13 @@ body:has(#surface.onbing) #shell{padding:14px}
 .up-ic{width:54px;height:54px;border-radius:18px;margin:0 auto 12px;display:grid;place-items:center;background:var(--lav)}
 .up-ic .ub-dot{width:16px;height:16px}
 .updpop h2{font-size:22px;margin-bottom:4px}.up-ver{font-weight:700;color:var(--ink-2);margin-bottom:6px}.up-notes{color:var(--ink-2);margin-bottom:8px}
+
+/* Messages tab: conversation list on the left, the thread on the right */
+.msgwrap{display:grid;grid-template-columns:minmax(230px,300px) 1fr;gap:16px;height:calc(100vh - 190px);min-height:440px}
+@media (max-width:820px){.msgwrap{grid-template-columns:1fr;height:auto}}
+.msgside,.msgmain{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);min-height:0}
+.msgside{padding:16px 10px;overflow-y:auto}.msghead{display:flex;align-items:baseline;justify-content:space-between;padding:0 10px 10px}
+.msgside .prow{width:100%;border-radius:14px;padding:10px;transition:background .2s}.msgside .prow.sel{background:var(--lav)}
+.msgmain{padding:16px 18px;display:flex;flex-direction:column}
+.msgmain .chat{min-width:0;height:100%;flex:1;min-height:0}
+.msgempty{margin:auto;text-align:center;display:flex;flex-direction:column;gap:4px;color:var(--muted)}.msgempty b{color:var(--ink);font-family:var(--carve);font-size:19px}

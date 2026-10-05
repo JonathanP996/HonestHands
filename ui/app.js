@@ -62,13 +62,16 @@ window.addEventListener('resize', fitRail); fitRail();
 
 // A small dot on Community when a friend has messaged you or is asking you to release them.
 function paintBadge() {
-  const btn = document.querySelector('.railbtn[data-tab="community"]');
-  if (!btn) return;
-  const ib = (S && S.inbox) || {}, n = (ib.unread || 0) + (ib.requests || 0);
-  let b = btn.querySelector('.rbadge');
-  if (!n) { if (b) b.remove(); return; }
-  if (!b) { b = document.createElement('i'); b.className = 'rbadge'; btn.querySelector('.ico').appendChild(b); }
-  b.textContent = n > 9 ? '9+' : n;
+  const ib = (S && S.inbox) || {};
+  const set = (tab, n) => {
+    const btn = document.querySelector(`.railbtn[data-tab="${tab}"]`); if (!btn) return;
+    let b = btn.querySelector('.rbadge');
+    if (!n) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('i'); b.className = 'rbadge'; btn.querySelector('.ico').appendChild(b); }
+    b.textContent = n > 9 ? '9+' : n;
+  };
+  set('community', ib.requests || 0);          // release requests and invites live in Community
+  set('messages', ib.unread || 0);             // unread messages live on their own tab
 }
 
 // ---- sidebar greeting (signed-in users) ----
@@ -91,6 +94,7 @@ const TAB_META = {
   classes:   { title: 'Classes',       crumb: 'Your courses' },
   log:       { title: 'Activity',      crumb: 'What the guard has checked' },
   community: { title: 'Community',      crumb: 'HonestHands' },
+  messages:  { title: 'Messages',       crumb: 'Your friends' },
   history:   { title: 'History',        crumb: 'Your study sessions' },
   insights:  { title: 'Insights',       crumb: 'How you\'re doing' },
   settings:  { title: 'Settings',      crumb: 'HonestHands' },
@@ -154,7 +158,7 @@ function paint() {
   if (sess) chips += extChipHTML();
   chips += engineChipHTML();
   $('#chips').innerHTML = chips;
-  ({ home: paintHome, classes: paintClasses, log: paintLog, history: paintHistory, insights: paintInsights, community: paintCommunity, settings: paintSettings }[TAB])();
+  ({ home: paintHome, classes: paintClasses, log: paintLog, history: paintHistory, insights: paintInsights, community: paintCommunity, messages: paintMessages, settings: paintSettings }[TAB])();
   const m = document.getElementById('main'); m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter');
 }
 document.querySelectorAll('#rail .railbtn[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; paint(); });

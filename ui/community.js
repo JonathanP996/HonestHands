@@ -129,7 +129,6 @@ function paintCommHome(me) {
       <div class="icard rise" style="--i:2"><div class="ihead"><h2>People I watch</h2><span class="icap" id="wcap"></span></div><div id="watching"></div></div>
       <div class="icard rise" style="--i:3"><div class="ihead"><h2>Watching me</h2><span class="icap" id="mcap"></span></div><div id="watchers"></div></div>
     </div>
-    <div class="icard rise" style="--i:4"><div class="ihead"><h2>Messages</h2><span class="icap" id="msgcap"></span></div><div id="convos"></div></div>
     <div class="icard rise" style="--i:5;margin-top:18px"><div class="ihead"><h2>Overridden Feed</h2><span class="icap">FROM PEOPLE YOU WATCH</span></div><div id="feed"></div></div>
   </div>`;
   let mode = 'watch_me';
@@ -150,9 +149,8 @@ function paintCommHome(me) {
 }
 
 async function refreshComm() {
-  const [ov, inc, convos] = await Promise.all([api().cloud_overview(), api().cloud_incoming_unlocks(), api().cloud_conversations()]);
+  const [ov, inc] = await Promise.all([api().cloud_overview(), api().cloud_incoming_unlocks()]);
   if (document.getElementById('releases')) drawReleases(Array.isArray(inc) ? inc : []);
-  if (document.getElementById('convos')) drawConvos(Array.isArray(convos) ? convos : []);
   if (!document.getElementById('feed')) return;
   if (ov && ov.error) { $('#feed').innerHTML = `<p class="muted">${h(ov.error)}</p>`; return; }
   const sp = ov.status || {};
@@ -268,30 +266,65 @@ function drawReleases(rows) {
 }
 
 // ---------------------------------------------------------------- messages
+let MSG_SEL = null, MSG_DRAFT = '', MSG_TIMER = null;
 function drawConvos(rows) {
   const unread = rows.reduce((a, r) => a + r.unread, 0);
-  $('#msgcap').textContent = unread ? `${unread} UNREAD` : '';
-  $('#convos').innerHTML = rows.map(r => { const p = r.person, last = r.last;
-    return `<button class="prow clickable" data-chat="${p.id}">${avatar(p.display_name, p.id)}
-      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(last.body.slice(0, 70)) : 'Say hello'}</span></div>
-      ${r.unread ? `<i class="ubadge">${r.unread}</i>` : '<span class="chev">›</span>'}</button>`; }).join('')
-    || '<p class="muted small">Messages appear here once you and a friend are connected (one of you can see the other).</p>';
-  $('#convos').querySelectorAll('[data-chat]').forEach(b => b.onclick = () => openChat(rows.find(r => r.person.id === b.dataset.chat).person));
+  const cap = document.getElementById('msgcap'); if (cap) cap.textContent = unread ? `${unread} UNREAD` : '';
+  const box = document.getElementById('convos'); if (!box) return;
+  box.innerHTML = rows.map(r => { const p = r.person, last = r.last;
+    return `<button class="prow clickable ${MSG_SEL && MSG_SEL.id === p.id ? 'sel' : ''}" data-chat="${p.id}">${avatar(p.display_name, p.id)}
+      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(last.body.split('\n')[0].slice(0, 60)) : 'Say hello'}</span></div>
+      ${r.unread ? `<i class="ubadge">${r.unread}</i>` : ''}</button>`; }).join('')
+    || '<p class="muted small" style="padding:6px 10px">Messages appear here once you and a friend are connected (one of you can see the other).</p>';
+  box.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => selectChat(rows.find(r => r.person.id === b.dataset.chat).person));
 }
 
 const THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3z"/><path d="M7 11l4-8c1.7 0 3 1.3 3 3v3.5h5a2 2 0 0 1 2 2.3l-1.2 7a2 2 0 0 1-2 1.7H7"/></svg>';
 const THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3z"/><path d="M7 11l4-8c1.7 0 3 1.3 3 3v3.5h5a2 2 0 0 1 2 2.3l-1.2 7a2 2 0 0 1-2 1.7H7"/></svg>';
 
 let CHAT_TIMER = null;
-async function openChat(person, draft = '') {
+// Anything that wants to talk to someone (the feed, a friend's page, the list) lands on the Messages tab with them selected.
+function openChat(person, draft = '') {
+  MSG_SEL = person; MSG_DRAFT = draft || '';
+  TAB = 'messages'; paint();
+}
+function selectChat(person, draft = '') {
+  MSG_SEL = person; MSG_DRAFT = draft || '';
+  document.querySelectorAll('#convos .prow').forEach(b => b.classList.toggle('sel', b.dataset.chat === person.id));
+  mountChat(person);
+}
+
+async function paintMessages() {
+  clearInterval(MSG_TIMER); clearInterval(CHAT_TIMER);
+  const m = $('#main');
+  const st = await api().cloud_status();
+  if (!st || !st.signed_in) {
+    m.innerHTML = `<div class="wrap"><div class="authcard rise"><h2>Sign in to message friends</h2><p class="sub">Messages are between you and the people you’re connected to. Sign in or create an account in Community first.</p><button class="btn" id="msg-go">Open Community</button></div></div>`;
+    $('#msg-go').onclick = () => { TAB = 'community'; paint(); };
+    return;
+  }
+  m.innerHTML = `<div class="wrap msgwrap rise"><div class="msgside"><div class="msghead"><h2>Messages</h2><span class="icap" id="msgcap"></span></div><div id="convos"><p class="muted small" style="padding:6px 10px">Loading…</p></div></div>
+    <div class="msgmain" id="msgmain"><div class="msgempty"><b>Pick a conversation</b><span>Choose a friend on the left to read and reply.</span></div></div></div>`;
+  const refresh = async () => {
+    if (TAB !== 'messages' || !document.getElementById('convos')) { clearInterval(MSG_TIMER); return; }
+    const rows = await api().cloud_conversations();
+    drawConvos(Array.isArray(rows) ? rows : []);
+  };
+  await refresh();
+  if (MSG_SEL) mountChat(MSG_SEL);
+  MSG_TIMER = setInterval(refresh, 8000);
+}
+
+async function mountChat(person) {
   clearInterval(CHAT_TIMER);
-  const node = el(`<div class="chat"><div class="chathead">${avatar(person.display_name, person.id, 44)}<div><h2>${h(person.display_name)}</h2><span class="muted small">@${h(person.handle || '')}</span></div></div>
+  const main = document.getElementById('msgmain'); if (!main) return;
+  main.innerHTML = `<div class="chat"><div class="chathead">${avatar(person.display_name, person.id, 44)}<div><h2>${h(person.display_name)}</h2><span class="muted small">@${h(person.handle || '')}</span></div></div>
     <div class="chatlist" id="chatlist"><p class="muted small">Loading…</p></div>
-    <div class="chatbar"><textarea id="chatin" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button class="btn" id="chatsend">Send</button></div></div>`);
-  modal(node);
+    <div class="chatbar"><textarea id="chatin" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button class="btn" id="chatsend">Send</button></div></div>`;
+  const draft = MSG_DRAFT; MSG_DRAFT = '';
   let sig = '';
   const load = async (stick) => {
-    const box = document.getElementById('chatlist'); if (!box) { clearInterval(CHAT_TIMER); return; }
+    const box = document.getElementById('chatlist'); if (!box || !MSG_SEL || MSG_SEL.id !== person.id || TAB !== 'messages') { clearInterval(CHAT_TIMER); return; }
     const d = await api().cloud_thread(person.id);
     if (!d || d.error) { box.innerHTML = `<p class="muted small">${h((d && d.error) || 'Could not load.')}</p>`; return; }
     const s = d.messages.map(m => m.id).join(','); if (s === sig) return; sig = s;
@@ -300,6 +333,7 @@ async function openChat(person, draft = '') {
     box.innerHTML = d.messages.length ? d.messages.map(m => `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}${vcls(m)}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
       : '<p class="muted small" style="text-align:center;margin-top:30px">No messages yet. Say hello.</p>';
     if (stick || atEnd) box.scrollTop = box.scrollHeight;
+    if (d.messages.some(m => m.to_user === d.me)) paintMsgBadgeSoon();
   };
   const send = async () => {
     const inp = $('#chatin'), body = inp.value.trim(); if (!body) return;
@@ -308,6 +342,7 @@ async function openChat(person, draft = '') {
     $('#chatsend').disabled = false; inp.focus();
     if (r && r.error) { toast(r.error); inp.value = body; return; }
     await load(true);
+    const rows = await api().cloud_conversations(); drawConvos(Array.isArray(rows) ? rows : []);
   };
   $('#chatsend').onclick = send;
   $('#chatin').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
@@ -315,3 +350,5 @@ async function openChat(person, draft = '') {
   await load(true); $('#chatin').focus(); $('#chatin').setSelectionRange($('#chatin').value.length, $('#chatin').value.length);
   CHAT_TIMER = setInterval(() => load(false), 4000);
 }
+// reading a thread marks it read on the server: refresh the sidebar number shortly after
+function paintMsgBadgeSoon() { setTimeout(async () => { try { S = await api().state(); paintBadge(); } catch (e) {} }, 800); }
