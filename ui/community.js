@@ -210,14 +210,13 @@ function drawFeed() {
     const before = e.reactions || [];
     e.reactions = before.filter(r => r.reviewer !== ov.me).concat(verdict ? [{ reviewer: ov.me, verdict }] : []);
     drawFeed();
-    const r = await api().cloud_react(e.id, verdict, (e.who || {}).id || '', e.prompt_text || '');
+    const r = await api().cloud_react(e.id, verdict, (e.who || {}).id || '', e.prompt_text || '', { site: e.site || '', cls: e.class_label || '', asg: e.assignment_label || '', at: e.at || '' });
     if (r && r.error) { e.reactions = before; drawFeed(); toast(/reactions|schema|exist/i.test(r.error) ? 'Thumbs need a one-time database update (cloud/migrations/003_notes_and_reactions.sql).' : r.error); }
   });
   box.querySelectorAll('[data-talk]').forEach(b => b.onclick = () => {
     const e = ov.feed[+b.dataset.talk], who = e.who || {};
     const person = (ov.watching.find(w => w.person.id === who.id) || {}).person || who;
-    const q = (e.prompt_text || '').slice(0, 500);
-    openChat(person, `Let’s talk about this one:\n“${q}”${e.class_label ? `\n(${e.class_label}${e.site ? ', ' + e.site : ''})` : ''}\n\n`);
+    openChat(person, '', cardFromEvent(e));
   });
 }
 
@@ -266,17 +265,52 @@ function drawReleases(rows) {
 }
 
 // ---------------------------------------------------------------- messages
-let MSG_SEL = null, MSG_DRAFT = '', MSG_TIMER = null;
+let MSG_SEL = null, MSG_DRAFT = '', MSG_ATTACH = null, MSG_TIMER = null;
+function previewOf(body) {
+  const { card, text } = parseCard(body);
+  if (card && card.t === 'verdict') return (card.v === 'up' ? '\u{1F44D} Fine' : '\u{1F44E} Not okay');
+  if (card) return '\u{1F4CE} Shared a prompt' + (text.trim() ? ': ' + text.trim().slice(0, 40) : '');
+  return text.split('\n')[0].slice(0, 60);
+}
 function drawConvos(rows) {
   const unread = rows.reduce((a, r) => a + r.unread, 0);
   const cap = document.getElementById('msgcap'); if (cap) cap.textContent = unread ? `${unread} UNREAD` : '';
   const box = document.getElementById('convos'); if (!box) return;
   box.innerHTML = rows.map(r => { const p = r.person, last = r.last;
     return `<button class="prow clickable ${MSG_SEL && MSG_SEL.id === p.id ? 'sel' : ''}" data-chat="${p.id}">${avatar(p.display_name, p.id)}
-      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(last.body.split('\n')[0].slice(0, 60)) : 'Say hello'}</span></div>
+      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(previewOf(last.body)) : 'Say hello'}</span></div>
       ${r.unread ? `<i class="ubadge">${r.unread}</i>` : ''}</button>`; }).join('')
     || '<p class="muted small" style="padding:6px 10px">Messages appear here once you and a friend are connected (one of you can see the other).</p>';
   box.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => selectChat(rows.find(r => r.person.id === b.dataset.chat).person));
+}
+
+// ---- picture-cards inside messages: a prompt (or a thumb on one) travels as a hidden token at the end of the message text ----
+const CARD_RE = /\n?\[\[hh:([A-Za-z0-9+\/=]+)\]\]\s*$/;
+function parseCard(body) {
+  const m = CARD_RE.exec(body || '');
+  if (!m) return { card: null, text: body || '' };
+  try { return { card: JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1]), c => c.charCodeAt(0)))), text: body.slice(0, m.index) }; }
+  catch (e) { return { card: null, text: body.slice(0, m.index) }; }
+}
+function cardToken(card) {
+  const bytes = new TextEncoder().encode(JSON.stringify(card)); let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return '[[hh:' + btoa(bin) + ']]';
+}
+function cardFromEvent(e, kind = 'prompt', v = '') {
+  return { t: kind, v, text: (e.prompt_text || '').slice(0, 300), site: e.site || '', cls: e.class_label || '', asg: e.assignment_label || '', at: e.at || '' };
+}
+// The card itself: the same look as a row in Activity, but as an object you can hold: accent edge, site chip, big quote, class and time.
+function cardHTML(c, removable = false) {
+  const when = c.at ? new Date(c.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const verdict = c.t === 'verdict' ? (c.v === 'up'
+    ? `<div class="pc-verdict up">${THUMB_UP}<b>Fine</b></div>` : `<div class="pc-verdict down">${THUMB_DOWN}<b>Not okay</b></div>`) : '';
+  return `<div class="pcard ${c.t === 'verdict' ? 'v' + c.v : ''}">
+    ${verdict}
+    <div class="pc-top"><span class="pc-dot"></span><b>Overridden</b>${c.site ? `<span class="pc-site">${h(c.site)}</span>` : ''}${removable ? '<button class="pc-x" id="attachx" title="Remove">×</button>' : ''}</div>
+    <div class="pc-q"><i>“</i>${h(c.text || '')}<i>”</i></div>
+    <div class="pc-foot"><span>${h([c.cls, c.asg].filter(Boolean).join(' / ') || 'Study session')}</span>${when ? `<span>${h(when)}</span>` : ''}</div>
+  </div>`;
 }
 
 const THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3z"/><path d="M7 11l4-8c1.7 0 3 1.3 3 3v3.5h5a2 2 0 0 1 2 2.3l-1.2 7a2 2 0 0 1-2 1.7H7"/></svg>';
@@ -284,12 +318,12 @@ const THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 let CHAT_TIMER = null;
 // Anything that wants to talk to someone (the feed, a friend's page, the list) lands on the Messages tab with them selected.
-function openChat(person, draft = '') {
-  MSG_SEL = person; MSG_DRAFT = draft || '';
+function openChat(person, draft = '', attach = null) {
+  MSG_SEL = person; MSG_DRAFT = draft || ''; MSG_ATTACH = attach;
   TAB = 'messages'; paint();
 }
-function selectChat(person, draft = '') {
-  MSG_SEL = person; MSG_DRAFT = draft || '';
+function selectChat(person, draft = '', attach = null) {
+  MSG_SEL = person; MSG_DRAFT = draft || ''; MSG_ATTACH = attach;
   document.querySelectorAll('#convos .prow').forEach(b => b.classList.toggle('sel', b.dataset.chat === person.id));
   mountChat(person);
 }
@@ -320,8 +354,16 @@ async function mountChat(person) {
   const main = document.getElementById('msgmain'); if (!main) return;
   main.innerHTML = `<div class="chat"><div class="chathead">${avatar(person.display_name, person.id, 44)}<div><h2>${h(person.display_name)}</h2><span class="muted small">@${h(person.handle || '')}</span></div></div>
     <div class="chatlist" id="chatlist"><p class="muted small">Loading…</p></div>
-    <div class="chatbar"><textarea id="chatin" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button class="btn" id="chatsend">Send</button></div></div>`;
+    <div id="attachbar" class="attachbar" hidden></div>
+    <div class="chatbar"><textarea id="chatin" rows="1" maxlength="1500" placeholder="Write a message…"></textarea><button class="btn" id="chatsend">Send</button></div></div>`;
   const draft = MSG_DRAFT; MSG_DRAFT = '';
+  const drawAttach = () => {
+    const bar = document.getElementById('attachbar'); if (!bar) return;
+    bar.hidden = !MSG_ATTACH;
+    bar.innerHTML = MSG_ATTACH ? `<span class="att-l">Attached to your message</span>${cardHTML(MSG_ATTACH, true)}` : '';
+    const x = document.getElementById('attachx'); if (x) x.onclick = () => { MSG_ATTACH = null; drawAttach(); $('#chatin').focus(); };
+  };
+  drawAttach();
   let sig = '';
   const load = async (stick) => {
     const box = document.getElementById('chatlist'); if (!box || !MSG_SEL || MSG_SEL.id !== person.id || TAB !== 'messages') { clearInterval(CHAT_TIMER); return; }
@@ -330,17 +372,25 @@ async function mountChat(person) {
     const s = d.messages.map(m => m.id).join(','); if (s === sig) return; sig = s;
     const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
     const vcls = (m) => m.kind === 'system' && m.body.startsWith('\u{1F44D}') ? ' vup' : m.kind === 'system' && m.body.startsWith('\u{1F44E}') ? ' vdown' : '';
-    box.innerHTML = d.messages.length ? d.messages.map(m => `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}${vcls(m)}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
+    const bubble = (m) => {
+      const { card, text } = parseCard(m.body), mine = m.from_user === d.me;
+      const time = `<em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em>`;
+      if (card) return `<div class="bubble cardmsg ${mine ? 'mine' : 'theirs'}">${cardHTML(card)}${card.t !== 'verdict' && text.trim() ? `<span class="cm-t">${h(text.trim())}</span>` : ''}${time}</div>`;
+      return null;
+    };
+    box.innerHTML = d.messages.length ? d.messages.map(m => bubble(m) || `<div class="bubble ${m.from_user === d.me ? 'mine' : 'theirs'}${vcls(m)}"><span>${h(m.body)}</span><em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em></div>`).join('')
       : '<p class="muted small" style="text-align:center;margin-top:30px">No messages yet. Say hello.</p>';
     if (stick || atEnd) box.scrollTop = box.scrollHeight;
     if (d.messages.some(m => m.to_user === d.me)) paintMsgBadgeSoon();
   };
   const send = async () => {
-    const inp = $('#chatin'), body = inp.value.trim(); if (!body) return;
-    inp.value = ''; $('#chatsend').disabled = true;
+    const inp = $('#chatin'), typed = inp.value.trim(); if (!typed && !MSG_ATTACH) return;
+    const body = (typed + (MSG_ATTACH ? '\n' + cardToken(MSG_ATTACH) : '')).trim();
+    const held = MSG_ATTACH;
+    inp.value = ''; MSG_ATTACH = null; drawAttach(); $('#chatsend').disabled = true;
     const r = await api().cloud_send_message(person.id, body);
     $('#chatsend').disabled = false; inp.focus();
-    if (r && r.error) { toast(r.error); inp.value = body; return; }
+    if (r && r.error) { toast(r.error); inp.value = typed; MSG_ATTACH = held; drawAttach(); return; }
     await load(true);
     const rows = await api().cloud_conversations(); drawConvos(Array.isArray(rows) ? rows : []);
   };

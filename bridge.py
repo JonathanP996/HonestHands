@@ -661,8 +661,8 @@ class Api:
     def cloud_friend(self, user_id):
         return self._cloud(self._app.cloud.friend, user_id)
 
-    def cloud_react(self, event_id, verdict, owner_id='', prompt=''):
-        return self._cloud(self._app.cloud.react, event_id, verdict, owner_id, prompt)
+    def cloud_react(self, event_id, verdict, owner_id='', prompt='', meta=None):
+        return self._cloud(self._app.cloud.react, event_id, verdict, owner_id, prompt, meta)
 
     def cloud_set_note(self, t, text, body):
         return self._cloud(self._app.cloud.set_note, t, text, body)

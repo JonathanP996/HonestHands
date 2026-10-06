@@ -7,7 +7,9 @@ Privacy rules (see cloud/schema.sql, which the database also enforces):
 The local log stays the source of truth: sync just re-sends whatever the cloud hasn't got, so being offline loses nothing.
 """
 import hashlib
+import base64
 import json
+import re
 import os
 import threading
 import time
@@ -33,6 +35,27 @@ class CloudError(Exception):
 
 def code_is_429(pgc):
     return str(pgc) == '429'
+
+
+# A message can carry a small picture-card (a prompt, or a thumb on one) as a hidden token at the end of its text.
+# The token is base64 JSON, so older copies of the app just see an extra line and nothing breaks.
+CARD_RE = re.compile(r'\n?\[\[hh:([A-Za-z0-9+/=]+)\]\]\s*$')
+
+
+def make_card(kind, **fields):
+    raw = json.dumps(dict(fields, t=kind), ensure_ascii=False).encode()
+    return '[[hh:' + base64.b64encode(raw).decode() + ']]'
+
+
+def split_card(body):
+    """(card dict or None, the readable text without the token)."""
+    m = CARD_RE.search(body or '')
+    if not m:
+        return None, body or ''
+    try:
+        return json.loads(base64.b64decode(m.group(1)).decode()), body[:m.start()]
+    except Exception:
+        return None, body[:m.start()]
 
 
 def iso(t):
@@ -423,7 +446,8 @@ class Cloud:
         for m in unread:
             if m['id'] not in self._seen_ids and not first and watcher:
                 who = (m.get('sender') or {}).get('display_name') or 'A friend'
-                b = m['body']
+                card, b = split_card(m['body'])
+                b = b.strip() or ('Shared a prompt with you' if card else '')
                 if m.get('kind') == 'system' and b[:1] in ('\U0001F44D', '\U0001F44E'):
                     watcher.notify('HonestHands', f"{who} gave your prompt a thumbs {'up' if b[0] == chr(0x1F44D) else 'down'}: {b.split(chr(10), 1)[-1][:70]}", 'messages')
                 else:
@@ -522,7 +546,7 @@ class Cloud:
             self.app.release_session(f'{name} released you')
 
     # ------------------------------------------------- notes and thumbs on overridden prompts
-    def react(self, event_id, verdict, owner_id='', prompt=''):
+    def react(self, event_id, verdict, owner_id='', prompt='', meta=None):
         """A thumbs up / down ('up' | 'down') on a friend's overridden prompt; '' takes it back.
         A new verdict also lands in their messages (green for fine, red for not okay) so they hear about it."""
         if verdict in ('up', 'down'):
@@ -535,8 +559,11 @@ class Cloud:
         if owner_id and owner_id != self.uid:
             head = '\U0001F44D Fine' if verdict == 'up' else '\U0001F44E Not okay'
             try:
+                meta = meta or {}
+                card = make_card('verdict', v=verdict, text=(prompt or '')[:300], site=meta.get('site') or '', cls=meta.get('cls') or '',
+                                 asg=meta.get('asg') or '', at=meta.get('at') or '')
                 self._rest('POST', 'messages', {'from_user': self.uid, 'to_user': owner_id, 'kind': 'system',
-                                                'body': f'{head}\n\u201c{(prompt or "")[:300]}\u201d'}, prefer='return=minimal')
+                                                'body': f'{head}\n\u201c{(prompt or "")[:300]}\u201d\n{card}'}, prefer='return=minimal')
             except CloudError:
                 pass                                      # the thumb itself is saved; the message is a courtesy
         return True
