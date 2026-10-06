@@ -176,6 +176,8 @@ class WinApp(extension_host.ExtensionHost):
         threading.Thread(target=self._lock_tick, daemon=True).start()
         watcher_win.Guard.block_handler = self.show_overlay_block
         watcher_win.Guard.overlay_hook = self.native_overlay
+        if not self.guard.install():
+            print('[guard] could not start the keyboard watcher', flush=True)
         try:
             bridge_server.start(self)
         except Exception as e:

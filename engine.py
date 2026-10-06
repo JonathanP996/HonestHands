@@ -1,4 +1,4 @@
-"""The AI that does the guarding: one small model that runs privately on this Mac.
+"""The AI that does the guarding: one small model that runs privately on this computer.
 
 It runs INSIDE this app with llama-cpp-python (no separate program, nothing uploaded). There is a single model on
 purpose: fewer choices, nothing to misconfigure. If it isn't ready yet, the guard falls back to keyword rules for a moment.
@@ -18,7 +18,7 @@ UA = {'User-Agent': 'HonestHands/1.0'}
 
 MODELS = {
     'small': {
-        'label': 'The built-in AI: private, runs on this Mac, about 2 GB',
+        'label': 'The built-in AI: private, runs on this computer, about 2 GB',
         'file': 'qwen2.5-3b-instruct-q4_k_m.gguf',
         'url': 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf',
         'size': 2104932768,   # exact bytes: a file of any other size is incomplete or corrupt and gets downloaded again

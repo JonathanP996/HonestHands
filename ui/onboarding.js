@@ -49,7 +49,7 @@ const skipLnk = (label, id) => `<a href="#" class="oskip3" id="${id}">${label}</
 function stepWelcome() {
   return ostage({ art: 'welcome', title: 'Welcome to HonestHands',
     sub: 'It checks what you’re about to send to an AI against your class’s own rules and warns you first, so AI stays a tutor and not a shortcut.',
-    body: `<div class="otrio3"><div><b>Private</b><span>The AI runs on your Mac</span></div><div><b>Honest</b><span>Send anyway; it’s just recorded</span></div><div><b>Together</b><span>A friend can cheer you on</span></div></div>
+    body: `<div class="otrio3"><div><b>Private</b><span>The AI runs on your computer</span></div><div><b>Honest</b><span>Send anyway; it’s just recorded</span></div><div><b>Together</b><span>A friend can cheer you on</span></div></div>
       <p class="overse3">“…doing honest work with his own hands.” <span>Ephesians 4:28</span></p>`,
     next: nextBtn('Let’s set it up') });
 }
@@ -58,12 +58,12 @@ function stepAccess() {
   const p = S.perms || {};
   const acc = !!p.accessibility, notif = ONB_FLAGS.notifOk;
   const body = `
-    <div class="orow ${acc ? 'done' : ''}">
+    ${S.platform === 'mac' ? `<div class="orow ${acc ? 'done' : ''}">
       <span class="orow-i">${acc ? CHECK : oicon('lock')}</span>
       <div class="orow-t"><b>Accessibility <em>required</em></b><span>Lets the guard see what you type and hold the send.</span></div>
       ${acc ? `<span class="ostatus ok">${p.watching ? 'Guard on' : 'Granted'}</span>` : '<button class="osm" id="o-acc">Grant</button>'}
-    </div>
-    ${acc ? '' : `<ol class="ohow"><li>Click <b>Grant</b>. System Settings opens.</li><li>Switch on <b>HonestHands</b> (or <b>Terminal</b> if you run it from there).</li><li>Come back. This page notices by itself.</li></ol>`}
+    </div>` : ''}
+    ${acc || S.platform !== 'mac' ? '' : `<ol class="ohow"><li>Click <b>Grant</b>. System Settings opens.</li><li>Switch on <b>HonestHands</b> (or <b>Terminal</b> if you run it from there).</li><li>Come back. This page notices by itself.</li></ol>`}
     <div class="orow ${notif ? 'done' : ''}">
       <span class="orow-i">${notif ? CHECK : oicon('bell')}</span>
       <div class="orow-t"><b>Notifications <em class="opt">optional</em></b><span>Quiet alerts, like when a friend’s prompt is flagged.</span></div>
@@ -72,14 +72,14 @@ function stepAccess() {
                                      : '<button class="osm ghost" id="o-notif">Test</button>'}
     </div>
     ${ONB_FLAGS.notifTried && !notif ? '<p class="onote">Didn’t see it? Make sure notifications are on for <b>HonestHands</b>. <a href="#" id="o-notif-open">Open settings</a></p>' : ''}`;
-  return ostage({ art: 'access', title: 'Let it watch for sends',
-    sub: 'macOS needs your OK first. This is what lets the guard read a message and pause it for a check.', body,
+  return ostage({ art: 'access', title: S.platform === 'mac' ? 'Let it watch for sends' : 'Quiet alerts',
+    sub: S.platform === 'mac' ? 'Your computer needs your OK first. This is what lets the guard read a message and pause it for a check.' : 'HonestHands can send you a quiet alert, like when a friend’s prompt is flagged. Nothing else needs your permission.', body,
     next: nextBtn(acc ? 'Next' : 'Continue anyway') });
 }
 
 function aiStatusHTML() {
   const e = S.engine;
-  if (e.ready) return `<div class="oready">${CHECK}<div><b>Guard is ready</b><span>Running privately on your Mac.</span></div></div>`;
+  if (e.ready) return `<div class="oready">${CHECK}<div><b>Guard is ready</b><span>Running privately on your computer.</span></div></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     const pr = e.progress, pct = pr && pr.total ? Math.round(100 * pr.done / pr.total) : 0;
     const gb = pr && pr.total ? `${(pr.done / 1e9).toFixed(2)} of ${(pr.total / 1e9).toFixed(1)} GB` : (e.message || 'Starting…');
@@ -94,7 +94,7 @@ const aiKind = () => { const e = S.engine; return e.ready ? 'ready' : (e.state =
 function stepAI() {
   const e = S.engine;
   return ostage({ art: 'ai', title: 'Your built-in AI guard',
-    sub: `A one-time ${e.size_gb} GB download. It runs entirely on this Mac, so nothing you type is ever sent to a server.`,
+    sub: `A one-time ${e.size_gb} GB download. It runs entirely on this computer, so nothing you type is ever sent to a server.`,
     body: `<div class="oai" id="o-ai" data-kind="${aiKind()}">${aiStatusHTML()}</div><p class="onote c">You can keep going while it downloads.</p>`,
     next: nextBtn('Next') });
 }
@@ -102,7 +102,7 @@ function stepAI() {
 function stepBrowser() {
   const chosen = S.browser && S.browser.chosen;
   return ostage({ art: 'browser', small: !!chosen, title: 'Pick your browser',
-    sub: 'Gemini and ChatGPT hide their send button from your Mac, so a tiny extension covers the gap. Choose the one browser you’ll use for AI.',
+    sub: 'Gemini and ChatGPT hide their send button from your computer, so a tiny extension covers the gap. Choose the one browser you’ll use for AI.',
     body: `<div id="o-brpanel">${browserPanelHTML()}</div>`,
     next: nextBtn('Next', 'o-next', !chosen), skip: skipLnk('Skip for now', 'o-skipbrowser') });
 }

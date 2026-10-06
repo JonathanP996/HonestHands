@@ -3,7 +3,7 @@
 Privacy rules (see cloud/schema.sql, which the database also enforces):
   - only OVERRIDDEN prompts are uploaded with their text
   - flagged / clean messages are uploaded as counts only (sessions + daily)
-  - syllabi and assignment text never leave this Mac
+  - syllabi and assignment text never leave this computer
 The local log stays the source of truth: sync just re-sends whatever the cloud hasn't got, so being offline loses nothing.
 """
 import hashlib

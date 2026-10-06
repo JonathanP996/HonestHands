@@ -167,7 +167,7 @@ function engineBanner() {
   const e = S.engine;
   if (e.ready) return '';
   if (e.state === 'needs_setup')
-    return `<div class="banner warn"><div><b>The AI needs a one-time setup.</b><div class="small">Until then, checking uses simple keyword rules only. It's a ${e.size_gb} GB download, and everything stays on this Mac.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
+    return `<div class="banner warn"><div><b>The AI needs a one-time setup.</b><div class="small">Until then, checking uses simple keyword rules only. It's a ${e.size_gb} GB download, and everything stays on this computer.</div></div><button class="btn sm" onclick="TAB='settings';paint()">Set up</button></div>`;
   if (e.state === 'downloading' || e.state === 'starting') {
     let bar = '';
     if (e.progress && e.progress.total) { const pct = Math.round(100 * e.progress.done / e.progress.total);
@@ -411,7 +411,7 @@ let LOGPAGE = 1, LOGKIND = 'all';
 async function paintLog() {
   const m = $('#main');
   m.innerHTML = `<div class="wrap"><div class="row" style="align-items:center">
-    <div style="flex:2"><h1>Activity</h1><p class="sub">Everything the guard has checked. Stored only on this Mac.</p></div>
+    <div style="flex:2"><h1>Activity</h1><p class="sub">Everything the guard has checked. Stored only on this computer.</p></div>
     <div style="flex:1;text-align:right"><div class="btnrow" style="justify-content:flex-end">
       <button class="btn ghost sm" id="exp">Export report</button><button class="btn danger sm" id="clr">Clear</button></div></div></div>
     <div class="filters" id="logfilters"></div>
@@ -493,16 +493,16 @@ function paintSettings() {
   m.innerHTML = `<div class="wrap"><h1>Settings</h1>
     <div class="card"><h2>About</h2><p class="sub">HonestHands ${h(S.version || '')}. ${S.auto_updates ? 'Updates install automatically when you say yes.' : S.update ? 'A newer version is ready.' : 'You have the latest version.'}</p>
       <div class="btnrow"><button class="btn ghost" id="chkup">Check for updates</button>${S.update ? '<button class="btn" id="getup">Download update</button>' : ''}</div></div>
-    <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my Mac” follows your system setting.</p>
-      <div class="segmode themeseg" id="themeseg">${[['system', 'Match my Mac'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="card"><h2>Appearance</h2><p class="sub">Light or dark. “Match my system” follows your system setting.</p>
+      <div class="segmode themeseg" id="themeseg">${[['system', 'Match my system'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-th="${k}" class="${(S.theme || 'system') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     </div>
-    <div class="card"><h2>The Guard</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this Mac, so what you type stays private. One model, nothing to configure.</p>
+    <div class="card"><h2>The Guard</h2><p class="sub">The built-in AI that reads each message against your class rules. It runs on this computer, so what you type stays private. One model, nothing to configure.</p>
       <div class="btnrow"><span class="chip ${e.ready ? 'good' : 'warn'}"><span class="d"></span>${e.ready ? 'Ready' : h(e.message || 'Not set up yet')}</span>
         ${e.ready ? '' : `<button class="btn" id="apply">${e.state === 'error' ? 'Try again' : 'Download &amp; set up'}</button>`}</div>
       <div id="eprog"></div>
     </div>
     <div class="card"><h2>Guarded browser</h2>
-      <p class="sub">Pick the one browser where AI websites are allowed during a study session, and set up its extension. The extension does nothing unless HonestHands is running and a session is active. The Claude and ChatGPT desktop apps are covered by the Mac app directly.</p>
+      <p class="sub">Pick the one browser where AI websites are allowed during a study session, and set up its extension. The extension does nothing unless HonestHands is running and a session is active. The Claude and ChatGPT desktop apps are covered by the app directly.</p>
       <div id="extBody"></div>
     </div>
     <div class="card"><h2>Stay locked in</h2>
@@ -520,10 +520,10 @@ function paintSettings() {
       <div class="btnrow"><button class="btn ghost" id="pinbtn">${S.has_pin?'Change PIN':'Set PIN'}</button>
         ${S.has_pin?'<button class="btn danger" id="pinrm">Remove PIN</button>':''}</div>
       ${S.has_pin?'<p class="small muted mt">To remove it, type the current PIN above, then press Remove PIN.</p>':''}</div>
-    <div class="card"><h2>This Mac</h2>
-      <div class="btnrow"><button class="btn ghost sm" id="acc">Accessibility settings</button>
+    <div class="card"><h2>This computer</h2>
+      <div class="btnrow">${S.platform === 'mac' ? '<button class="btn ghost sm" id="acc">Accessibility settings</button>' : ''}
         <button class="btn ghost sm" id="data">Open data folder</button></div>
-      <p class="small muted mt">Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · The guard is ${S.perms.watching ? 'on' : 'off'}</p></div>
+      <p class="small muted mt">${S.platform === 'mac' ? `Permission: ${S.perms.accessibility ? 'granted' : 'not granted'} · ` : ''}The guard is ${S.perms.watching ? 'on' : 'off'}</p></div>
     </div>`;
   const extBox = document.getElementById('extBody');
   extBox.innerHTML = browserPanelHTML();
@@ -544,7 +544,7 @@ function paintSettings() {
   });
   $('#chkup').onclick = async () => { $('#chkup').disabled = true; const r = await api().check_update(); $('#chkup').disabled = false; if (r && !r.error) { S = r; if (!S.auto_updates) toast(S.update ? 'A new version is ready.' : 'You have the latest version.'); paintSettings(); paintUpdateBar(); } };
   if ($('#getup')) $('#getup').onclick = () => api().open_update();
-  $('#acc').onclick = () => api().open_accessibility_settings();
+  if ($('#acc')) $('#acc').onclick = () => api().open_accessibility_settings();
   $('#data').onclick = () => api().open_data_folder();
 }
 

@@ -117,7 +117,7 @@ class Api:
             'has_pin': bool(s.data.get('pin')),
             'onboarded': bool(s.data.get('onboarded')),
             'extension': self._extension_status(),
-            'theme': s.data.get('theme', 'system'),
+            'theme': s.data.get('theme', 'system'), 'platform': platform_info.NAME,
             'version': version.VERSION, 'update': (getattr(self._app, 'updater', None).available() if getattr(self._app, 'updater', None) else None), 'auto_updates': sparkle.active(),
             'browser': {'chosen': s.data.get('browser', ''), 'options': browserlib.options()},
             'lock': dict({'browsers': True, 'ai_apps': False}, **(s.data.get('lock') or {})),

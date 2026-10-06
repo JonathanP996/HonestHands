@@ -13,7 +13,7 @@ function browserPanelHTML() {
   const b = S.browser || { chosen: '', options: [] }, ext = S.extension || {}, live = !!S.ext_live;
   const pick = b.options.map(o => `<button class="brtile ${b.chosen === o.key ? 'on' : ''} ${o.installed ? '' : 'missing'}" data-pick="${o.key}">
       <span class="brmark">${BR_MARK[o.key]}</span><b>${h(o.name)}</b>
-      <span class="brnote">${o.installed ? (b.chosen === o.key ? 'Your guarded browser' : 'Installed') : 'Not installed on this Mac'}</span>
+      <span class="brnote">${o.installed ? (b.chosen === o.key ? 'Your guarded browser' : 'Installed') : 'Not installed on this computer'}</span>
       ${b.chosen === o.key ? '<i class="brtick">✓</i>' : ''}</button>`).join('');
   const info = `<p class="brinfo">While a study session is on, AI websites work <b>only in the browser you choose</b>. Sending a message to an AI site in any other browser is blocked, so there is no easy way around the guard.</p>`;
   if (!b.chosen) return `<div class="brgrid">${pick}</div>${info}`;
@@ -27,14 +27,14 @@ function browserPanelHTML() {
     <li class="${ready ? '' : 'dim'}"><div><b>Open ${name}’s extensions page</b><span>Switch on <em>Developer mode</em> (top right).</span></div>
       <button class="btn ghost" data-act="page" ${ready ? '' : 'disabled'}>Open ${name}</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Click “Load unpacked” and choose that folder</b><span>It’s the <em>HonestHands Extension</em> folder in Downloads. It stays on after that.</span></div>
-      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
+      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show the folder</button></li>`;
   else if (kind === 'firefox') steps = `
     <li class="${ready ? 'done' : ''}"><div><b>Download the Firefox extension</b><span>Saves a folder called <em>HonestHands Extension (Firefox)</em> to your Downloads, packaged the way Firefox wants it.</span></div>
       <button class="btn ${ready ? 'ghost' : ''}" data-act="prep">${ready ? 'Download again' : 'Download'}</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Open Firefox’s add-on debugging page</b><span>Click <em>Load Temporary Add-on…</em></span></div>
       <button class="btn ghost" data-act="page" ${ready ? '' : 'disabled'}>Open Firefox</button></li>
     <li class="${ready ? '' : 'dim'}"><div><b>Choose the file named manifest.json</b><span>It’s inside the Downloads folder you just saved. Firefox forgets temporary add-ons when it quits, so repeat this after a restart.</span></div>
-      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show in Finder</button></li>`;
+      <button class="btn ghost" data-act="folder" ${ready ? '' : 'disabled'}>Show the folder</button></li>`;
   else if (kind === 'safari' && ext.bundled) steps = `
     <li class="done"><div><b>The Safari extension is built in</b><span>Nothing to download or build. Keep HonestHands in your Applications folder.</span></div></li>
     <li><div><b>Turn it on in Safari</b><span>Tick <em>HonestHands Guard</em> in the list. Then, to allow every AI site at once: in the website list, click one row, press <b>⌘A</b> and click <b>Remove</b>, then set <em>When visiting other websites</em> (below the list) to <b>Allow</b>. Or choose Allow on each site one by one.</span></div>
