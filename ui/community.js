@@ -266,11 +266,13 @@ function drawReleases(rows) {
 
 // ---------------------------------------------------------------- messages
 let MSG_SEL = null, MSG_DRAFT = '', MSG_ATTACH = null, MSG_TIMER = null;
-function previewOf(body) {
-  const { card, text } = parseCard(body);
-  if (card && card.t === 'verdict') return (card.v === 'up' ? '\u{1F44D} Fine' : '\u{1F44E} Not okay');
-  if (card) return '\u{1F4CE} Shared a prompt' + (text.trim() ? ': ' + text.trim().slice(0, 40) : '');
-  return text.split('\n')[0].slice(0, 60);
+const CARD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3.5"/><path d="M10 10.2c-1.2 0-2 .8-2 2s.8 1.5 1.6 1.5M16 10.2c-1.2 0-2 .8-2 2s.8 1.5 1.6 1.5"/></svg>';
+// the one-line preview in the conversation list: small line icons, never emoji
+function previewHTML(body, kind = '') {
+  const { card, text } = parseCard(body, kind);
+  if (card && card.t === 'verdict') return card.v === 'up' ? `<span class="pv up">${THUMB_UP}Fine</span>` : `<span class="pv down">${THUMB_DOWN}Not okay</span>`;
+  if (card) return `<span class="pv">${CARD_ICON}Shared a prompt</span>${text.trim() ? ': ' + h(text.trim().slice(0, 40)) : ''}`;
+  return h(text.split('\n')[0].slice(0, 60));
 }
 function drawConvos(rows) {
   const unread = rows.reduce((a, r) => a + r.unread, 0);
@@ -278,7 +280,7 @@ function drawConvos(rows) {
   const box = document.getElementById('convos'); if (!box) return;
   box.innerHTML = rows.map(r => { const p = r.person, last = r.last;
     return `<button class="prow clickable ${MSG_SEL && MSG_SEL.id === p.id ? 'sel' : ''}" data-chat="${p.id}">${avatar(p.display_name, p.id)}
-      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + h(previewOf(last.body)) : 'Say hello'}</span></div>
+      <div class="pmain"><b>${h(p.display_name)}</b><span class="${r.unread ? 'unread' : ''}">${last ? (last.from_user === p.id ? '' : 'You: ') + previewHTML(last.body, last.kind) : 'Say hello'}</span></div>
       ${r.unread ? `<i class="ubadge">${r.unread}</i>` : ''}</button>`; }).join('')
     || '<p class="muted small" style="padding:6px 10px">Messages appear here once you and a friend are connected (one of you can see the other).</p>';
   box.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => selectChat(rows.find(r => r.person.id === b.dataset.chat).person));
@@ -286,9 +288,17 @@ function drawConvos(rows) {
 
 // ---- picture-cards inside messages: a prompt (or a thumb on one) travels as a hidden token at the end of the message text ----
 const CARD_RE = /\n?\[\[hh:([A-Za-z0-9+\/=]+)\]\]\s*$/;
-function parseCard(body) {
+function parseCard(body, kind = '') {
   const m = CARD_RE.exec(body || '');
-  if (!m) return { card: null, text: body || '' };
+  if (!m) {
+    // thumbs sent by older copies of the app were plain text ("👍 Fine" + the quote): show them as cards too
+    const up = (body || '').startsWith('\u{1F44D}'), down = (body || '').startsWith('\u{1F44E}');
+    if (kind === 'system' && (up || down)) {
+      const q = (body.split('\n').slice(1).join('\n') || '').replace(/^\u201c|\u201d$/g, '').trim();
+      return { card: { t: 'verdict', v: up ? 'up' : 'down', text: q }, text: '' };
+    }
+    return { card: null, text: body || '' };
+  }
   try { return { card: JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1]), c => c.charCodeAt(0)))), text: body.slice(0, m.index) }; }
   catch (e) { return { card: null, text: body.slice(0, m.index) }; }
 }
@@ -373,7 +383,7 @@ async function mountChat(person) {
     const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
     const vcls = (m) => m.kind === 'system' && m.body.startsWith('\u{1F44D}') ? ' vup' : m.kind === 'system' && m.body.startsWith('\u{1F44E}') ? ' vdown' : '';
     const bubble = (m) => {
-      const { card, text } = parseCard(m.body), mine = m.from_user === d.me;
+      const { card, text } = parseCard(m.body, m.kind), mine = m.from_user === d.me;
       const time = `<em>${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</em>`;
       if (card) return `<div class="bubble cardmsg ${mine ? 'mine' : 'theirs'}">${cardHTML(card)}${card.t !== 'verdict' && text.trim() ? `<span class="cm-t">${h(text.trim())}</span>` : ''}${time}</div>`;
       return null;

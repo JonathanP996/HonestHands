@@ -1098,3 +1098,7 @@ body:has(#surface.onbing) #shell{padding:14px}
 .att-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
 @keyframes cardin{from{opacity:0;transform:translateY(10px) scale(.96)}}
 .bubble.cardmsg .pcard{animation:cardin .35s cubic-bezier(.3,1.4,.4,1) both}
+
+.pv{display:inline-flex;align-items:center;gap:5px;font-weight:700;vertical-align:bottom}.pv svg{width:14px;height:14px;flex:none}
+.pv.up{color:#4E8A3A}.pv.down{color:var(--stop)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pv.up{color:#B7DFA5}}:root[data-theme="dark"] .pv.up{color:#B7DFA5}
