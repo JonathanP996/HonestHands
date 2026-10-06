@@ -208,6 +208,63 @@ def send_click(x, y):
     user32.SendInput(2, arr, ctypes.sizeof(INPUT))
 
 
+class _ClickLookup:
+    """One long-lived thread with UI Automation already started, so looking at a clicked button takes milliseconds instead of
+    the first-call delay (which would make the first clicks slip past unchecked)."""
+
+    def __init__(self):
+        import queue
+        self._q = queue.Queue()
+        self._ready = threading.Event()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            import uiautomation as auto
+            with auto.UIAutomationInitializerInThread():
+                try:
+                    auto.ControlFromPoint(1, 1)                  # warm-up: the slow first call happens now, not on a click
+                except Exception:
+                    pass
+                self._ready.set()
+                while True:
+                    x, y, box, done = self._q.get()
+                    try:
+                        box['send'] = _control_is_send(auto, x, y)
+                    except Exception as e:
+                        box['send'] = None
+                        print('[guard] click lookup failed:', e, flush=True)
+                    done.set()
+        except Exception as e:
+            print('[guard] click lookup thread could not start:', e, flush=True)
+            self._ready.set()
+
+    def is_send(self, x, y, wait):
+        if not self._ready.is_set():
+            return None                                          # still warming up: do not hold clicks yet
+        box, done = {}, threading.Event()
+        self._q.put((x, y, box, done))
+        done.wait(wait)
+        return box.get('send')
+
+
+_LOOKUP = None
+
+
+def _control_is_send(auto, x, y):
+    c = auto.ControlFromPoint(int(x), int(y))
+    for _ in range(3):                                           # the click can land on an icon inside the button
+        if c is None:
+            return False
+        label = ' '.join(str(v or '') for v in (c.Name, c.AutomationId, c.HelpText))
+        if SEND_WORDS.search(label) or any(g in label for g in SEND_GLYPHS):
+            return True
+        if c.ControlTypeName == 'ButtonControl':
+            return False
+        c = c.GetParentControl()
+    return False
+
+
 def click_is_send(x, y):
     """Is the control under this point a 'send' button? Looks at its name / id through UI Automation."""
     try:
@@ -274,8 +331,11 @@ class Guard:
 
     # ---------------------------------------------------------------- the keyboard hook
     def install(self):
+        global _LOOKUP
         if self._hook is not None:
             return True
+        if _LOOKUP is None:
+            _LOOKUP = _ClickLookup()
         ready = threading.Event()
 
         def run():
@@ -341,13 +401,10 @@ class Guard:
         where = ai_app_name(exe, title)
         if not where:
             return False
-        box = {}
         t0 = time.time()
-        t = threading.Thread(target=lambda: box.setdefault('send', click_is_send(x, y)), daemon=True)
-        t.start()
-        t.join(CLICK_LOOKUP_WAIT)
-        diag(f'click at ({x},{y}) in {exe!r}: send button? {box.get("send")} (looked for {int((time.time() - t0) * 1000)} ms)')
-        if not box.get('send'):
+        is_send = _LOOKUP.is_send(x, y, CLICK_LOOKUP_WAIT) if _LOOKUP is not None else None
+        diag(f'click at ({x},{y}) in {exe!r}: send button? {is_send} (looked for {int((time.time() - t0) * 1000)} ms)')
+        if not is_send:
             return False
         diag(f'Send click in {exe!r} -> watching as {where}')
         self.locked = True
