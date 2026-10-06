@@ -9,3 +9,5 @@ llama-cpp-python[server]>=0.3.2
 certifi
 pyobjc-framework-SafariServices>=10.3; sys_platform == "darwin"
 pyobjc-framework-UserNotifications>=10.3; sys_platform == "darwin"
+pystray; sys_platform == "win32"
+Pillow; sys_platform == "win32"

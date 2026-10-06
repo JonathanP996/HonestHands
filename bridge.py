@@ -8,6 +8,7 @@ import cloud as cloudlib
 import extensions
 import keepalive
 import sparkle
+import platform_info
 import version
 import distill
 import docs
@@ -262,7 +263,7 @@ class Api:
             self.prepare_extension()
         key = self._chosen()
         # show the folder itself, selected in Finder, so it is obvious which one to pick in the browser
-        subprocess.Popen(['open', '-R', str(d)] if key != 'safari' else ['open', str(d)])
+        platform_info.open_path(d, reveal=(key != 'safari'))
         return True
 
     def set_lock(self, browsers_on, ai_apps_on):
@@ -289,7 +290,7 @@ class Api:
         try:
             if key == 'safari' and extensions.bundled_safari() and extensions.show_in_safari():
                 return True                                   # opened Safari right on the extension's switch
-            subprocess.Popen(['open', '-b', info['bundle']] + ([info['page']] if info['page'] else []))
+            platform_info.open_in_browser(info, info['page'])
             return True
         except Exception as e:
             return _err(e)
@@ -586,7 +587,7 @@ class Api:
 
     def open_notification_settings(self):
         import subprocess
-        subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.Notifications-Settings.extension'])
+        platform_info.open_settings('notifications')
         return True
 
     def set_pin(self, old_pin, new_pin):
@@ -735,5 +736,5 @@ class Api:
         return True
 
     def open_data_folder(self):
-        subprocess.Popen(['open', str(APP_DIR)])
+        platform_info.open_path(APP_DIR)
         return True

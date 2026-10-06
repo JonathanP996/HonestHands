@@ -30,6 +30,9 @@ def watcher_args(label=LABEL, config=None, lock=None, cmd=None, interval=3):
 
 
 def install(label=LABEL, args=None):
+    from platform_info import IS_WIN
+    if IS_WIN:
+        return            # TODO: a Task Scheduler entry; not built yet
     path = plist_path(label)
     path.parent.mkdir(parents=True, exist_ok=True)
     plist = {'Label': label, 'ProgramArguments': args or watcher_args(label), 'KeepAlive': True, 'RunAtLoad': True,
@@ -43,6 +46,9 @@ def install(label=LABEL, args=None):
 
 
 def remove(label=LABEL):
+    from platform_info import IS_WIN
+    if IS_WIN:
+        return
     subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}/{label}'], capture_output=True)
     try:
         plist_path(label).unlink()

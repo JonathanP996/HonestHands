@@ -5,7 +5,11 @@ import threading
 import uuid
 from pathlib import Path
 
-APP_DIR = Path.home() / 'Library' / 'Application Support' / 'HonestHands'
+import os
+from platform_info import IS_WIN
+
+APP_DIR = (Path(os.environ.get('APPDATA') or Path.home() / 'AppData' / 'Roaming') / 'HonestHands') if IS_WIN \
+    else Path.home() / 'Library' / 'Application Support' / 'HonestHands'
 CONFIG = APP_DIR / 'config.json'
 LOG = APP_DIR / 'log.jsonl'
 
