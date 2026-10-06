@@ -129,7 +129,7 @@ class Engine:
         from llama_cpp import Llama
         llama = Llama(
             model_path=str(self.model_path()),
-            n_ctx=8192,
+            n_ctx=12288,
             n_gpu_layers=-1,   # offload everything to the Mac's GPU (Metal)
             verbose=False,
         )

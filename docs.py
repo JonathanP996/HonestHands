@@ -33,7 +33,7 @@ def extract_text(path):
 
 
 AI_TERMS = re.compile(r'\b(artificial intelligence|AI|A\.I\.|generative|ChatGPT|LLMs?|large language models?|chatbots?|Copilot|Claude|Gemini|GPT)\b', re.I)
-OTHER_TERMS = re.compile(r'\b(collaborat\w*|plagiari\w*|academic (integrity|honesty|dishonesty|misconduct)|honor code|cheat\w*|outside (help|resources|sources)|cite|citation|LaTeX|formatting|online (tools|resources)|Chegg|solutions? manual)\b', re.I)
+OTHER_TERMS = re.compile(r'\b(collaborat\w*|plagiari\w*|academic (integrity|honesty|dishonesty|misconduct)|honor code|cheat\w*|outside (help|resources|sources)|cite|citation|LaTeX|formatting|online (tools|resources)|Chegg|Course ?Hero|Quizlet|Grammarly|Photomath|Wolfram|Stack ?Overflow|solutions? manual|unauthori[sz]ed|prohibit\w*|not (permitted|allowed)|tutors?|translat\w*|paraphras\w*|ghostwrit\w*|essay mills?)\b', re.I)
 
 
 def relevant_sections(text, max_chars=7000):
@@ -58,7 +58,7 @@ def relevant_sections(text, max_chars=7000):
     return ''.join(out)[:max_chars]
 
 
-def ai_policy_text(text, max_chars=5000):
+def ai_policy_text(text, max_chars=12000):
     """The parts of a syllabus that govern AI and outside help, in original order, copied as written.
     Syllabi are short, so this keeps whole runs of sentences around each AI mention (and fills small
     gaps) rather than isolated lines. Nothing is paraphrased or dropped inside a run."""
@@ -75,8 +75,7 @@ def ai_policy_text(text, max_chars=5000):
                 keep.update(range(a, b))
         return keep
     keep = pick(AI_TERMS)
-    if sum(len(sentences[i]) for i in keep) < 400:
-        keep |= pick(OTHER_TERMS, 1, 2)
+    keep |= pick(OTHER_TERMS, 1, 2)          # rules on outside help, collaboration and integrity also cover AI: never leave them out
     out, prev, total = [], -2, 0
     for i in sorted(keep):
         if total + len(sentences[i]) > max_chars:

@@ -302,6 +302,7 @@ class App:
         self.cloud.start()
         AppHelper.callAfter(self._start_updates)
         AppHelper.callAfter(self._setup_notifications)
+        self.ai_guard.prebuild()
         threading.Thread(target=self._lock_tick, daemon=True).start()
         (keepalive.install if self.locked_now() else keepalive.remove)()     # a stale watcher must never outlive its lock-in
         AppHelper.callAfter(self.lock.start)           # app-switch notifications must be registered on the main thread
