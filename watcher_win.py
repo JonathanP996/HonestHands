@@ -86,7 +86,7 @@ VK_RETURN, VK_SHIFT, VK_MENU, VK_CONTROL = 0x0D, 0x10, 0x12, 0x11
 KEYEVENTF_KEYUP = 0x2
 INPUT_KEYBOARD, INPUT_MOUSE = 1, 0
 CLICK_LOOKUP_WAIT = 0.25      # seconds allowed to look at a clicked button before letting the click through
-WAIT_FOR_AI = 12          # seconds to wait for the AI before using the keyword rules
+WAIT_FOR_AI = slowai.WAIT   # seconds to wait for the AI before using the keyword rules
 MARK = 0x48414E44            # tags the Enter we send ourselves, so the hook lets it through
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 LRESULT = ctypes.c_ssize_t
@@ -463,7 +463,7 @@ class Guard:
                     except Exception:
                         pass
                 # A slow computer can take a long time to run the AI: wait a few seconds, then use the keyword rules.
-                r = slowai.check_with_fallback(self.ai_guard, lambda: self.ai_guard.check(text, cls, asg, where, timeout=10), text, cls, asg, wait=WAIT_FOR_AI)
+                r = slowai.check_with_fallback(self.ai_guard, lambda: self.ai_guard.check(text, cls, asg, where, timeout=WAIT_FOR_AI), text, cls, asg, wait=WAIT_FOR_AI)
                 if r.get('note'):
                     diag(f'AI check fallback: {r["note"]}')
             diag(f'verdict: level={r.get("level")} source={r.get("source")}')
