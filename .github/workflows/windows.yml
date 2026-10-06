@@ -1,0 +1,32 @@
+# Builds the Windows installer on GitHub's Windows machines. Run it by hand: Actions > "Windows build" > Run workflow.
+# (Signing: add repository secrets CERT_PFX_BASE64 and CERT_PASSWORD and the installer is signed too.)
+name: Windows build
+on:
+  workflow_dispatch:
+  push:
+    tags: ['win-v*']
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Certificate (optional)
+        if: ${{ secrets.CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String("${{ secrets.CERT_PFX_BASE64 }}"))
+          "CERT_PFX=$env:RUNNER_TEMP\cert.pfx" | Out-File -Append $env:GITHUB_ENV
+          "CERT_PASSWORD=${{ secrets.CERT_PASSWORD }}" | Out-File -Append $env:GITHUB_ENV
+      - name: Build
+        shell: pwsh
+        run: .\build_win.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HonestHands-Setup
+          path: dist/HonestHands-Setup.exe
