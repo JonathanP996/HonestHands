@@ -1,5 +1,7 @@
 """The guard: keyword rules first (instant), then the AI for everything else."""
 import hashlib
+import json
+import os
 import re
 import threading
 import time
@@ -32,12 +34,12 @@ Work through it in this order, in the JSON fields:
 Reply with JSON only, in exactly this order:
 {"asks":"...","policy_says":"...","forbidden":true|false,"verdict":"allow"|"warn"|"block","rule":"...","suggestion":"..."}"""
 
-EXTRACT_SYSTEM = """You read a course's AI policy and turn it into two short checklists.
+EXTRACT_SYSTEM = """You read a course's AI policy and turn it into two checklists. A screener will later see ONLY these checklists, so a restriction you leave out will never be enforced. Be thorough: go through the policy sentence by sentence, in order, and do not skip a sentence because it seems minor or repeats another one.
 
-1. "forbidden": the kinds of REQUESTS a student is not allowed to make to an AI chatbot under this policy. One item per distinct restriction. Write each item as an action starting with a verb, for example "ask the AI to solve a homework question", "use AI to fix or format LaTeX in your own answer", "share the assignment question, or your own answer or work, with the AI (even just to check or fix it)". Include the policy's own restrictions about formatting, writing, rewriting, sharing questions or work, and getting answers or solutions, whenever the policy states them. For each item give "quote": the exact words from the policy that forbid it (at most 25 words, copied exactly).
-2. "allowed": the kinds of requests the policy explicitly allows, as short actions (for example "ask about topics and formulae", "ask what a LaTeX command does").
+1. "forbidden": the kinds of REQUESTS a student is not allowed to make to an AI chatbot under this policy. One item per distinct restriction; if one sentence forbids several things, write one item for each. Write each item as an action starting with a verb, for example "ask the AI to solve a homework question", "use AI to fix or format LaTeX in your own answer", "share the assignment question, or your own answer or work, with the AI (even just to check or fix it)". Keep the specifics the policy gives: the kind of work, the tool, and any condition ("unless you cite it", "on graded work", "even if the work is your own"). Include the policy's own restrictions about formatting, writing, rewriting, sharing questions or work, and getting answers or solutions, whenever the policy states them, in whatever wording it uses ("not permitted", "will be treated as", "must not", "may not", "only if"). For each item give "quote": the exact words from the policy that forbid it (copied exactly, at most 30 words).
+2. "allowed": the kinds of requests the policy explicitly allows, as short actions, with any conditions (for example "ask about topics and formulae", "ask what a LaTeX command does").
 
-Never list something as forbidden if the policy says it IS allowed or fine (for example, a policy may allow copying your own work into your own conversation, or asking general questions). Only include what the policy actually says. At most 8 forbidden and 5 allowed items.
+Only include what the policy actually says; never add a rule it does not state, and never list the same restriction twice. Never list something as forbidden if the policy says it IS allowed or fine (for example, a policy may allow copying your own work into your own conversation, or asking general questions). When unsure whether a sentence restricts something, include it. At most 25 forbidden and 15 allowed items.
 Reply with JSON only: {"forbidden":[{"item":"...","quote":"..."}],"allowed":["..."]}"""
 
 CLASSIFY_SYSTEM = """You screen one message a student is about to send to an AI chatbot, for one course. Below is a numbered list of requests this course's AI policy FORBIDS, and a list of requests it ALLOWS.
@@ -52,6 +54,10 @@ How to match, with unrelated examples (a cooking class whose forbidden list is: 
 A reworded or shortened request still matches: what counts is the action the student wants done, not the exact words.
 
 Reply with JSON only: {"match": <number of the forbidden item, or 0>, "suggestion": "<at most 15 words the student could ask instead, or empty if match is 0>"}"""
+
+EXTRACT_MORE_SYSTEM = """You check a checklist against a course's AI policy. Below are the policy and the list of forbidden requests someone already wrote from it. Find every restriction in the policy that is NOT covered by an item on that list: anything the policy forbids, limits, or makes conditional (disclosure, citation, permission from the instructor, graded versus practice work, exams, specific tools, deadlines), including ones that look minor or repeat an idea in different words.
+Only report restrictions the policy really states, and copy the exact words in "quote" (at most 30 words). If the list already covers everything, reply {"forbidden":[]}.
+Reply with JSON only: {"forbidden":[{"item":"<what the student must not ask the AI to do>","quote":"<exact words from the policy>"}]}"""
 
 VERIFY_SYSTEM = """You check one claim about a course's AI policy. Read the policy, then decide what it says about the action described.
 Reply with JSON only: {"policy": "forbids" | "allows" | "silent"}
@@ -111,6 +117,37 @@ def parse_verdict(text):
     return out
 
 
+_ITEM_RE = re.compile(r'\{\s*"item"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"quote"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}')
+
+
+def _read_items(raw):
+    """The checklist the model wrote. If its answer was cut off or slightly broken, keep every complete item it did write."""
+    try:
+        return engine_parse(raw)
+    except Exception:
+        pass
+    forb = [{'item': m.group(1), 'quote': m.group(2)} for m in _ITEM_RE.finditer(raw)]
+    if not forb:
+        raise ValueError('the model did not return valid JSON')
+    allowed = []
+    am = re.search(r'"allowed"\s*:\s*\[(.*)', raw, re.S)
+    if am:
+        allowed = re.findall(r'"((?:[^"\\]|\\.){3,200})"', am.group(1))
+    return {'forbidden': forb, 'allowed': allowed}
+
+
+def _placeholder(item):
+    return bool(re.search(r'^an action\b|<.*>|^\.\.\.$|what the student must not', item.strip(), re.I))
+
+
+def _words(t):
+    return set(re.findall(r'[a-z0-9]{3,}', t.lower()))
+
+
+def _overlap(a, b):
+    return len(a & b) / max(1, min(len(a), len(b)))
+
+
 def _rules_text(items):
     if not items:
         return '(none listed)'
@@ -151,6 +188,10 @@ def build_prompt(text, cls, asg, where):
     return '\n'.join(parts)
 
 
+# Saved checklists are tied to the instructions that wrote them: change those and every checklist is rebuilt the next time.
+EXTRACT_VERSION = hashlib.sha1((EXTRACT_SYSTEM + EXTRACT_MORE_SYSTEM + VERIFY_SYSTEM).encode()).hexdigest()[:8]
+
+
 class AIGuard:
     def __init__(self, store, engine):
         self.store, self.engine = store, engine
@@ -162,6 +203,7 @@ class AIGuard:
         self.items_failed = {}
         self.pending = {}     # key -> Event, so the same message is only guarded once at a time
         self.lock = threading.Lock()
+        self.disk_lock = threading.Lock()
 
     @staticmethod
     def key(text, cls, asg):
@@ -273,18 +315,82 @@ class AIGuard:
     def _policy_parts(self, cls, asg):
         cp = (cls.get('policy_text') or '').strip()
         if not cp and cls.get('source_text'):
-            cp = docs.ai_policy_text(cls['source_text'], 3500)
+            cp = docs.ai_policy_text(cls['source_text'], 12000)
         return cp, ((asg or {}).get('policy_text') or '').strip()
+
+    # ---- checklists are saved on disk (checklists.json) so they are built once, not every time the app starts ----
+    @staticmethod
+    def _disk_path():
+        import store
+        return store.APP_DIR / 'checklists.json'
+
+    def _disk_read(self):
+        try:
+            return json.loads(self._disk_path().read_text())
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _disk_key(key):
+        return f'{EXTRACT_VERSION}|{key[0]}|{key[1]}|{key[2]}'
+
+    def _disk_get(self, key):
+        with self.disk_lock:
+            d = self._disk_read().get(self._disk_key(key))
+        it = d.get('items') if isinstance(d, dict) else None
+        return it if isinstance(it, dict) and isinstance(it.get('forbidden'), list) else None
+
+    def _disk_put(self, key, items):
+        try:
+            with self.disk_lock:
+                data = self._disk_read()
+                data[self._disk_key(key)] = {'items': items, 'at': time.time()}
+                if len(data) > 80:                                   # keep it small: drop the oldest
+                    for k in sorted(data, key=lambda k: data[k].get('at', 0))[:len(data) - 80]:
+                        data.pop(k, None)
+                f = self._disk_path()
+                tmp = f.with_name(f.name + '.tmp')
+                tmp.write_text(json.dumps(data))
+                os.replace(tmp, f)
+        except Exception as e:
+            print('[guard] could not save the checklist:', e, flush=True)
+
+    def prebuild(self, classes=None):
+        """Load or build every class's checklist in the background (once the AI is ready), so starting a study session
+        never has to wait for it. Called when the app starts and whenever a class or assignment is saved."""
+        def run():
+            try:
+                for _ in range(7200):
+                    if self.engine.ready():
+                        break
+                    time.sleep(1)
+                else:
+                    return
+                cur = (self.store.data.get('session') or {}).get('class_id')
+                todo = sorted(list(classes if classes is not None else self.store.data.get('classes', [])), key=lambda c: c.get('id') != cur)
+                for c in todo:
+                    for a in [None] + list(c.get('assignments') or []):
+                        try:
+                            self.items_for(c, a, wait=1)
+                        except Exception as e:
+                            print('[guard] prebuild skipped one:', e, flush=True)
+            except Exception as e:
+                print('[guard] prebuild stopped:', e, flush=True)
+        threading.Thread(target=run, daemon=True, name='hh-prebuild').start()
 
     def items_for(self, cls, asg, wait=12):
         """The private checklist (forbidden / allowed requests) for this class + assignment, built once per policy text."""
         cp, ap = self._policy_parts(cls, asg)
         if not (cp or ap):
             return None
-        key = (cls['id'], (asg or {}).get('id', ''), hashlib.sha1((cp + '||' + ap).encode()).hexdigest()[:16])
+        key = (cls['id'], (asg or {}).get('id', '') if ap else '', hashlib.sha1((cp + '||' + ap).encode()).hexdigest()[:16])
         with self.lock:
             if key in self.items:
                 return self.items[key]
+            saved = self._disk_get(key)
+            if saved:
+                self.items[key] = saved
+                return saved
             if time.time() - self.items_failed.get(key, 0) < 90:
                 return None                       # it failed recently; use the full-policy check for now
             ev = self.items_pending.get(key)
@@ -300,6 +406,7 @@ class AIGuard:
             with self.lock:
                 if items:
                     self.items[key] = items
+                    self._disk_put(key, items)
                 else:
                     self.items_failed[key] = time.time()
             return items
@@ -317,25 +424,50 @@ class AIGuard:
         user = f'Course: {cls["name"]}\n\nCLASS AI POLICY:\n{cp or "(none)"}'
         if ap:
             user += f'\n\nASSIGNMENT ({asg["name"]}) AI NOTES:\n{ap}'
-        data = engine_parse(self.engine.chat_raw(EXTRACT_SYSTEM, user, timeout=120, max_tokens=900))
+        data = _read_items(self.engine.chat_raw(EXTRACT_SYSTEM, user, timeout=900, max_tokens=1800))
         src = distill.norm(cp + ' ' + ap)
+        policy = f'{cp}\n\n{ap}'.strip()
         forbidden = []
-        for it in (data.get('forbidden') or [])[:10]:
+        for it in (data.get('forbidden') or [])[:25]:
             if not isinstance(it, dict):
                 continue
             item, quote = str(it.get('item', '')).strip(), str(it.get('quote', '')).strip()
             item = re.sub(r'\s*\bverbatim\b', '', item)                  # sharing counts even when it isn't word for word
-            if item:
+            if item and not _placeholder(item) and not any(_overlap(_words(item), _words(f['item'])) > 0.85 for f in forbidden):
                 forbidden.append({'item': item, 'quote': quote if quote and distill.quote_is_real(quote, src) else ''})
-        allowed = [str(a).strip() for a in (data.get('allowed') or [])[:6] if str(a).strip()]
+        allowed = list(dict.fromkeys(str(a).strip() for a in (data.get('allowed') or [])[:15] if str(a).strip()))
+        # A second pass for anything the first one missed. Only additions that quote the policy for real are kept, so a
+        # small model can't invent rules here; it can only find ones that were left out.
+        try:
+            have = '\n'.join(f'- {f["item"]}' for f in forbidden) or '(empty)'
+            more = _read_items(self.engine.chat_raw(EXTRACT_MORE_SYSTEM, f'POLICY:\n{policy}\n\nLIST SO FAR:\n{have}', timeout=900, max_tokens=900))
+            seen = [_words(f['item']) for f in forbidden]
+            for it in (more.get('forbidden') or [])[:15]:
+                if not isinstance(it, dict) or len(forbidden) >= 30:
+                    continue
+                item, quote = str(it.get('item', '')).strip(), str(it.get('quote', '')).strip()
+                if not item or _placeholder(item) or not quote or not distill.quote_is_real(quote, src):
+                    continue
+                w = _words(item)
+                if any(_overlap(w, x) > 0.7 for x in seen):
+                    continue                                       # already on the list in other words
+                if len(item.split()) > 24 or _overlap(w, _words(EXTRACT_MORE_SYSTEM)) > 0.6:
+                    continue                                       # the model echoed its instructions instead of finding a rule
+                qw = _words(quote)
+                if any(_overlap(qw, _words(f['quote'])) > 0.6 for f in forbidden if f['quote']):
+                    continue                                       # a rule that was missed cites a sentence nothing else cites
+                seen.append(w)
+                forbidden.append({'item': item, 'quote': quote})
+                print(f'[guard] second pass added: {item}', flush=True)
+        except Exception as e:
+            print('[guard] second pass skipped:', e, flush=True)
         # Second look: drop anything the policy actually allows (small models sometimes list the allowed half of a sentence).
-        policy = f'{cp}\n\n{ap}'.strip()
         kept = []
         for f in forbidden:
             try:
                 raw = self.engine.chat_raw(VERIFY_SYSTEM, f'POLICY:\n{policy}\n\nACTION: {f["item"]}', timeout=60, max_tokens=24)
                 m = re.search(r'"policy"\s*:\s*"(\w+)"', raw)
-                if m and m.group(1).lower() == 'allows':
+                if m and m.group(1).lower() == 'allows' and not (f['quote'] and BAN_HINT.search(f['quote'])):   # a quote that plainly prohibits stays
                     print(f'[guard] dropped checklist item the policy allows: {f["item"]}', flush=True)
                     continue
             except Exception:

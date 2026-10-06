@@ -330,12 +330,13 @@ class Api:
         c.update({'name': name, 'policy': draft.get('policy') or 'tutor',
                   'rules': self._clean_rules(draft.get('rules')), 'examples': self._clean_examples(draft.get('examples')),
                   'color': draft.get('color') if draft.get('color') in COLORS else c.get('color', COLORS[0]),
-                  'policy_text': str(draft.get('policy_text', '')).strip()[:4000],
+                  'policy_text': str(draft.get('policy_text', '')).strip()[:12000],
                   'category_reason': str(draft.get('category_reason', '')).strip()})
         if draft.get('source_text'):
             c['source_text'] = draft['source_text']
         self._store.save()
         self._app.ai_guard.forget()
+        self._app.ai_guard.prebuild([c])
         self._app.refresh_menu()
         return self.state()
 
@@ -350,11 +351,12 @@ class Api:
             c.setdefault('assignments', []).append(a)
         a.update({'name': name, 'rules': self._clean_rules(draft.get('rules')),
                   'examples': self._clean_examples(draft.get('examples')),
-                  'policy_text': str(draft.get('policy_text', '')).strip()[:3000]})
+                  'policy_text': str(draft.get('policy_text', '')).strip()[:8000]})
         if draft.get('source_text'):
             a['source_text'] = draft['source_text']
         self._store.save()
         self._app.ai_guard.forget()
+        self._app.ai_guard.prebuild([c])
         return self.state()
 
     def delete_class(self, class_id, pin=''):

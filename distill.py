@@ -100,7 +100,7 @@ def analyze(engine, text, kind='class', name=''):
     if len(text) < 20:
         raise ValueError('That looks empty. If it\'s a scanned PDF, copy the text and paste it instead.')
     policy_guess, _ = rules.suggest_policy(text)
-    policy_text = docs.ai_policy_text(text, 5000 if kind == 'class' else 2500)
+    policy_text = docs.ai_policy_text(text, 12000 if kind == 'class' else 8000)
     result = {'policy': policy_guess or 'tutor', 'rules': [], 'examples': [], 'dropped': 0, 'used_ai': False,
               'note': '', 'source_text': text[:(80000 if kind != 'class' else 40000)], 'policy_text': policy_text, 'category_reason': ''}
     if not policy_text:
