@@ -80,6 +80,7 @@ WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x100, 0x101, 0x104, 0x105
 VK_RETURN, VK_SHIFT, VK_MENU, VK_CONTROL = 0x0D, 0x10, 0x12, 0x11
 KEYEVENTF_KEYUP = 0x2
 INPUT_KEYBOARD = 1
+WAIT_FOR_AI = 12          # seconds to wait for the AI before using the keyword rules
 MARK = 0x48414E44            # tags the Enter we send ourselves, so the hook lets it through
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 LRESULT = ctypes.c_ssize_t
@@ -303,10 +304,23 @@ class Guard:
                         hook.checking()
                     except Exception:
                         pass
-                try:
-                    r = self.ai_guard.check(text, cls, asg, where, timeout=10)
-                except Exception as e:
-                    r = dict(rules.check(text, cls, asg), source='keywords', note=str(e))
+                # A slow computer can take a long time to run the AI. Wait a few seconds, then fall back to the keyword rules
+                # so Enter is never held for long (the AI result, if it finishes later, is cached for next time).
+                box = {}
+
+                def run_check():
+                    try:
+                        box['r'] = self.ai_guard.check(text, cls, asg, where, timeout=10)
+                    except Exception as e:
+                        box['err'] = e
+                t = threading.Thread(target=run_check, daemon=True)
+                t.start()
+                t.join(WAIT_FOR_AI)
+                r = box.get('r')
+                if r is None:
+                    why = box.get('err') or 'the AI was slow'
+                    diag(f'AI check fallback: {why}')
+                    r = dict(rules.check(text, cls, asg), source='keywords', note=str(why))
                     r['verdict'] = 'allow' if r['level'] != 'flag' else 'warn'
             diag(f'verdict: level={r.get("level")} source={r.get("source")}')
             self._finish(r, p, cls, asg)

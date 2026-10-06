@@ -61,7 +61,7 @@ function showBlock(p){
   card.className = p.hard ? 'hard':'';
   let i=0; const d=()=>`style="animation-delay:${(i++)*55}ms"`;
   const pad=document.getElementById('pad');
-  let html = `<div class="head stagger" ${d()}><div class="ico">✋</div><h1>${p.hard?'Message blocked':'Hold on a second'}</h1></div>`;
+  let html = `<div class="head stagger" ${d()}><div class="ico">✋</div><h1>${esc(p.title || (p.hard?'Message blocked':'Hold on a second'))}</h1></div>`;
   html += `<div class="ctx stagger" ${d()}>${esc(p.class)}${p.assignment?' / '+esc(p.assignment):''} · ${esc(p.where)}</div>`;
   html += `<div class="why stagger" ${d()}>${esc(p.reason)}</div>`;
   if(p.rule)  html += `<div class="line stagger" ${d()}><span class="lab">Rule:</span> ${esc(p.rule)}</div>`;
@@ -71,7 +71,7 @@ function showBlock(p){
   pad.innerHTML = html;
   const row=document.getElementById('row');
   if(p.hard){
-    row.innerHTML = `<button class="primary" onclick="choose('edit')">OK, I'll edit it</button>`;
+    row.innerHTML = `<button class="primary" onclick="choose('edit')">${esc(p.okLabel || "OK, I'll edit it")}</button>`;
   } else {
     row.innerHTML = `<button onclick="choose('edit')">Edit my message</button>
       <button class="primary warn" onclick="choose('send_anyway')">Send anyway</button>`;

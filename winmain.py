@@ -5,8 +5,11 @@ The Mac-only watcher is replaced by watcher_win (see WINDOWS.md); everything els
 import os
 import sys
 
-if len(sys.argv) > 1 and sys.argv[1] == '--watchdog':
-    raise SystemExit('The lock-in watcher is not built for Windows yet.')
+if len(sys.argv) > 1 and sys.argv[1] == '--watchdog-once':      # the timed-lock job: no UI, no heavy imports
+    import winkeepalive
+    from store import CONFIG
+    print(winkeepalive.watchdog_once(str(CONFIG)))
+    raise SystemExit(0)
 
 import watcher_win                      # must come first: the shared code does `import watcher`
 sys.modules['watcher'] = watcher_win
@@ -21,6 +24,7 @@ import bridge_server
 import cloud
 import extension_host
 import updates
+import winkeepalive
 import winlock
 import winoverlay
 from ai_guard import AIGuard
@@ -89,7 +93,8 @@ class WinApp(extension_host.ExtensionHost):
         cls, asg = self.store.session_targets()
         self.store.log({'t': time.time(), 'event': 'turned back from ' + app_name, 'class': cls['name'] if cls else '', 'assignment': ''})
         payload = {'hard': True, 'title': 'You’re locked in', 'context': (cls['name'] if cls else 'Study session') + ' · ' + app_name,
-                   'reason': reason, 'rule': '', 'quote': '', 'tip': '', 'source': 'session lock', 'allowSend': False}
+                   'reason': reason, 'rule': '', 'quote': '', 'tip': '', 'source': 'session lock', 'allowSend': False,
+                   'okLabel': 'Back to work'}
         if self.native_overlay is None or not self.native_overlay.show(payload, lambda choice: None):
             watcher_win.notify('HonestHands', reason)
 
@@ -182,6 +187,7 @@ class WinApp(extension_host.ExtensionHost):
         self.cloud.start()
         self.updater.start()
         self.lock.start()
+        (winkeepalive.install if self.locked_now() else winkeepalive.remove)()     # a stale job must never outlive its lock-in
         threading.Thread(target=self._lock_tick, daemon=True).start()
         watcher_win.Guard.block_handler = self.show_overlay_block
         watcher_win.Guard.overlay_hook = self.native_overlay

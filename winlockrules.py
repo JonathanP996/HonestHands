@@ -2,6 +2,15 @@
 import browsers
 
 BROWSER_EXES = {'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe'}
+PRETTY = {'msedge.exe': 'Microsoft Edge', 'chrome.exe': 'Google Chrome', 'firefox.exe': 'Firefox', 'brave.exe': 'Brave',
+          'opera.exe': 'Opera', 'vivaldi.exe': 'Vivaldi', 'arc.exe': 'Arc'}
+
+
+def pretty(exe):
+    exe = (exe or '').lower()
+    return PRETTY.get(exe) or (exe[:-4].capitalize() if exe.endswith('.exe') else exe)
+
+
 EXE_TO_KEY = {'chrome.exe': 'chrome', 'msedge.exe': 'edge', 'firefox.exe': 'firefox'}
 
 
@@ -10,7 +19,7 @@ def blocked_reason(exe, title, cfg, chosen, is_ai_app):
     exe = (exe or '').lower()
     if not exe:
         return None
-    name = exe[:-4].capitalize() if exe.endswith('.exe') else exe
+    name = pretty(exe)
     if cfg.get('browsers', True) and chosen and exe in BROWSER_EXES and EXE_TO_KEY.get(exe) != chosen:
         return f'{name} is blocked while you’re locked in. Use {browsers.BROWSERS[chosen]["name"]} for AI during this session.'
     if cfg.get('ai_apps') and is_ai_app(exe, title):

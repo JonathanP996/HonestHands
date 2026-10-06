@@ -32,7 +32,8 @@ class WinOverlay:
     def show(self, payload, on_choice):
         mapped = {'hard': payload.get('hard'), 'reason': payload.get('reason', ''), 'rule': payload.get('rule', ''),
                   'quote': payload.get('quote', ''), 'tip': payload.get('tip', ''), 'where': payload.get('context', ''),
-                  'source': payload.get('source', ''), 'class': '', 'assignment': ''}
+                  'source': payload.get('source', ''), 'class': '', 'assignment': '',
+                  'title': payload.get('title', ''), 'okLabel': payload.get('okLabel', '')}
         self._cb = on_choice
         self._open = True
         try:

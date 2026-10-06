@@ -9,7 +9,7 @@ import time
 import watcher_win as W
 
 SW_MINIMIZE, SW_RESTORE = 6, 9
-from winlockrules import EXE_TO_KEY, blocked_reason
+from winlockrules import EXE_TO_KEY, blocked_reason, pretty
 
 
 class SessionLock:
@@ -87,7 +87,7 @@ class SessionLock:
         self.blocked += 1
         user32.ShowWindow(hwnd, SW_MINIMIZE)
         self._return_to_work()
-        name = exe[:-4].capitalize() if exe.endswith('.exe') else exe
+        name = pretty(exe)
         if time.time() - self._last_msg.get(name, 0) > 4:            # repeated tries don't stack popups
             self._last_msg[name] = time.time()
             self.on_block(reason, name)

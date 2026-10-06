@@ -13,8 +13,32 @@ def _bytes(data):
     return bytes(data)
 
 
+def _read_text_windows(raw, max_chars):
+    """Windows' built-in text recognition (Windows.Media.Ocr): on this computer, nothing uploaded."""
+    import asyncio
+    from winrt.windows.graphics.imaging import BitmapDecoder
+    from winrt.windows.media.ocr import OcrEngine
+    from winrt.windows.storage.streams import DataWriter, InMemoryRandomAccessStream
+
+    async def run():
+        stream = InMemoryRandomAccessStream()
+        w = DataWriter(stream)
+        w.write_bytes(list(raw))
+        await w.store_async()
+        stream.seek(0)
+        bitmap = await (await BitmapDecoder.create_async(stream)).get_software_bitmap_async()
+        engine = OcrEngine.try_create_from_user_profile_languages()
+        result = await engine.recognize_async(bitmap)
+        return '\n'.join(line.text for line in result.lines)
+
+    return re.sub(r'[ \t]+', ' ', asyncio.run(run())).strip()[:max_chars]
+
+
 def read_text(image, max_chars=6000):
     try:
+        import sys
+        if sys.platform.startswith('win'):
+            return _read_text_windows(_bytes(image), max_chars)
         import Vision
         from Foundation import NSData
         raw = _bytes(image)
