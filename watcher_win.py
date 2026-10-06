@@ -75,11 +75,16 @@ def diag(msg):
 user32 = ctypes.WinDLL('user32', use_last_error=True)
 kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
 
-WH_KEYBOARD_LL = 13
+WH_KEYBOARD_LL, WH_MOUSE_LL = 13, 14
+WM_LBUTTONDOWN, WM_LBUTTONUP = 0x201, 0x202
+MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP = 0x2, 0x4
+SEND_WORDS = re.compile(r'\b(send|submit|run|generate)\b', re.I)     # narrow on purpose: 'message', 'go', 'ask' match unrelated buttons
+SEND_GLYPHS = ('\u2191', '\u2197', '\u27a4', '\u2b06', '\u279c', '\u25b6', '\u21e7', '\u2b95')
 WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x100, 0x101, 0x104, 0x105
 VK_RETURN, VK_SHIFT, VK_MENU, VK_CONTROL = 0x0D, 0x10, 0x12, 0x11
 KEYEVENTF_KEYUP = 0x2
-INPUT_KEYBOARD = 1
+INPUT_KEYBOARD, INPUT_MOUSE = 1, 0
+CLICK_LOOKUP_WAIT = 0.25      # seconds allowed to look at a clicked button before letting the click through
 WAIT_FOR_AI = 12          # seconds to wait for the AI before using the keyword rules
 MARK = 0x48414E44            # tags the Enter we send ourselves, so the hook lets it through
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -91,12 +96,24 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
     _fields_ = [('vkCode', wt.DWORD), ('scanCode', wt.DWORD), ('flags', wt.DWORD), ('time', wt.DWORD), ('dwExtraInfo', ctypes.c_size_t)]
 
 
+class POINT(ctypes.Structure):
+    _fields_ = [('x', ctypes.c_long), ('y', ctypes.c_long)]
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [('pt', POINT), ('mouseData', wt.DWORD), ('flags', wt.DWORD), ('time', wt.DWORD), ('dwExtraInfo', ctypes.c_size_t)]
+
+
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [('dx', ctypes.c_long), ('dy', ctypes.c_long), ('mouseData', wt.DWORD), ('dwFlags', wt.DWORD), ('time', wt.DWORD), ('dwExtraInfo', ctypes.c_size_t)]
+
+
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [('wVk', wt.WORD), ('wScan', wt.WORD), ('dwFlags', wt.DWORD), ('time', wt.DWORD), ('dwExtraInfo', ctypes.c_size_t)]
 
 
 class _INPUTUNION(ctypes.Union):
-    _fields_ = [('ki', KEYBDINPUT), ('pad', ctypes.c_byte * 32)]
+    _fields_ = [('ki', KEYBDINPUT), ('mi', MOUSEINPUT), ('pad', ctypes.c_byte * 32)]
 
 
 class INPUT(ctypes.Structure):
@@ -111,6 +128,7 @@ user32.GetForegroundWindow.restype = wt.HWND
 user32.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
 user32.GetWindowTextW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
 user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
 user32.SendInput.argtypes = [wt.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
 kernel32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
 kernel32.OpenProcess.restype = wt.HANDLE
@@ -179,6 +197,37 @@ def send_enter():
     user32.SendInput(2, arr, ctypes.sizeof(INPUT))
 
 
+def send_click(x, y):
+    """Click at a screen point for the person (after the guard said yes). Tagged so our own hook lets it through."""
+    user32.SetCursorPos(int(x), int(y))
+    down, up = INPUT(), INPUT()
+    down.type = up.type = INPUT_MOUSE
+    down.u.mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0, MARK)
+    up.u.mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0, MARK)
+    arr = (INPUT * 2)(down, up)
+    user32.SendInput(2, arr, ctypes.sizeof(INPUT))
+
+
+def click_is_send(x, y):
+    """Is the control under this point a 'send' button? Looks at its name / id through UI Automation."""
+    try:
+        import uiautomation as auto
+        with auto.UIAutomationInitializerInThread():
+            c = auto.ControlFromPoint(int(x), int(y))
+            for _ in range(3):                                   # the click can land on an icon inside the button
+                if c is None:
+                    return False
+                label = ' '.join(str(v or '') for v in (c.Name, c.AutomationId, c.HelpText))
+                if SEND_WORDS.search(label) or any(g in label for g in SEND_GLYPHS):
+                    return True
+                if c.ControlTypeName == 'ButtonControl':
+                    return False
+                c = c.GetParentControl()
+    except Exception as e:
+        print('[guard] could not look at the clicked control:', e, flush=True)
+    return False
+
+
 def read_focused_text():
     """The text in whatever box has the keyboard focus, through UI Automation. '' if it can't be read."""
     try:
@@ -219,6 +268,9 @@ class Guard:
         self._swallowed_up = False
         self._hook = None
         self._proc = None
+        self._mhook = None
+        self._mproc = None
+        self._swallow_click_up = False
 
     # ---------------------------------------------------------------- the keyboard hook
     def install(self):
@@ -229,6 +281,8 @@ class Guard:
         def run():
             self._proc = HOOKPROC(self._on_key)
             self._hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._proc, None, 0)
+            self._mproc = HOOKPROC(self._on_mouse)
+            self._mhook = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mproc, None, 0)
             self.watching = bool(self._hook)
             ready.set()
             if not self._hook:
@@ -261,6 +315,52 @@ class Guard:
             print('[guard] hook error, letting it through:', e, flush=True)
         return user32.CallNextHookEx(None, nCode, wParam, lParam)
 
+    def _on_mouse(self, nCode, wParam, lParam):
+        try:
+            if nCode == 0:
+                m = MSLLHOOKSTRUCT.from_address(lParam)
+                if m.dwExtraInfo != MARK:
+                    if wParam == WM_LBUTTONDOWN:
+                        if self._click_down(m.pt.x, m.pt.y):
+                            self._swallow_click_up = True
+                            return 1
+                    elif wParam == WM_LBUTTONUP and self._swallow_click_up:
+                        self._swallow_click_up = False
+                        return 1
+        except Exception as e:
+            print('[guard] mouse hook error, letting it through:', e, flush=True)
+        return user32.CallNextHookEx(None, nCode, wParam, lParam)
+
+    def _click_down(self, x, y):
+        """A click on a Send button in a desktop AI app is held like Enter is. Looking at the button is quick but not instant, so
+        only wait a moment: if Windows is slow to answer, the click goes through untouched."""
+        cls, asg = self.store.session_targets()
+        if not cls or self.locked:
+            return False
+        hwnd, exe, title, pid = front_window()
+        where = ai_app_name(exe, title)
+        if not where:
+            return False
+        box = {}
+        t0 = time.time()
+        t = threading.Thread(target=lambda: box.setdefault('send', click_is_send(x, y)), daemon=True)
+        t.start()
+        t.join(CLICK_LOOKUP_WAIT)
+        diag(f'click at ({x},{y}) in {exe!r}: send button? {box.get("send")} (looked for {int((time.time() - t0) * 1000)} ms)')
+        if not box.get('send'):
+            return False
+        diag(f'Send click in {exe!r} -> watching as {where}')
+        self.locked = True
+        self._t_start = time.time()
+        threading.Thread(target=self._decide, args=(hwnd, pid, where, cls, asg, 'click', (x, y)), daemon=True).start()
+        return True
+
+    def _resend(self, trigger, loc):
+        if trigger == 'click' and loc:
+            send_click(*loc)
+        else:
+            send_enter()
+
     def _enter_down(self):
         cls, asg = self.store.session_targets()
         if not cls:
@@ -278,20 +378,20 @@ class Guard:
             return True                                       # a check or a warning is already in progress
         self.locked = True
         self._t_start = time.time()
-        threading.Thread(target=self._decide, args=(hwnd, pid, where, cls, asg), daemon=True).start()
+        threading.Thread(target=self._decide, args=(hwnd, pid, where, cls, asg, 'enter', None), daemon=True).start()
         return True
 
     # ---------------------------------------------------------------- the decision
-    def _decide(self, hwnd, pid, where, cls, asg):
+    def _decide(self, hwnd, pid, where, cls, asg, trigger='enter', loc=None):
         try:
             text = read_focused_text()
             diag(f'read text: {text[:50]!r}')
             if not text:
-                self._release(); send_enter(); return          # nothing to check (or unreadable): let it through
-            p = {'pid': pid, 'hwnd': hwnd, 'where': where, 'text': text}
+                self._release(); self._resend(trigger, loc); return   # nothing to check (or unreadable): let it through
+            p = {'pid': pid, 'hwnd': hwnd, 'where': where, 'text': text, 'trigger': trigger, 'loc': loc}
             sa = self.sent_anyway
             if sa and sa[0].strip() == text and time.time() < sa[1]:
-                self._release(); send_enter(); return
+                self._release(); self._resend(trigger, loc); return
             r = self.ai_guard.cached(text, cls, asg)
             diag(f'cached: {r is not None}; engine ready: {self.ai_guard.engine.ready()}')
             if r is None and (rules.check(text, cls, asg).get('evade') or not self.ai_guard.engine.ready()):
@@ -328,7 +428,7 @@ class Guard:
             diag(f'decision error, letting it through: {e!r}')
             print('[guard] decision error, letting it through:', e, flush=True)
             self._release()
-            send_enter()
+            self._resend(trigger, loc)
 
     def _finish(self, r, p, cls, asg):
         if r['level'] in ('ok', 'note'):
@@ -338,18 +438,18 @@ class Guard:
                     hook.ok()
                 except Exception:
                     pass
-            self.record(p, cls, asg, 'enter', 'ok (disclose)' if r['level'] == 'note' else 'ok', r)
+            self.record(p, cls, asg, p.get('trigger', 'enter'), 'ok (disclose)' if r['level'] == 'note' else 'ok', r)
             if r['level'] == 'note' and r.get('reasons'):
                 notify('HonestHands', r['reasons'][0])
             same = front_window()[0] == p['hwnd']
             self._release()
             if same:
-                send_enter()
+                self._resend(p.get('trigger'), p.get('loc'))
             else:
                 notify('HonestHands', "Your message passed the check but wasn't sent because you switched apps. Send it again.")
             return
         hard = self.is_hard(r)
-        self.record(p, cls, asg, 'enter', 'blocked' if hard else 'warned', r)
+        self.record(p, cls, asg, p.get('trigger', 'enter'), 'blocked' if hard else 'warned', r)
         self.show_warning(r, hard, p, cls, asg)               # stays held until the person chooses
 
     def show_warning(self, r, hard, p, cls, asg):
@@ -375,7 +475,7 @@ class Guard:
             same = front_window()[0] == p.get('hwnd')
             self._release()
             if same:
-                threading.Timer(0.35, send_enter).start()
+                threading.Timer(0.35, lambda: self._resend(p.get('trigger'), p.get('loc'))).start()
             return
         self._release()
 

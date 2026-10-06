@@ -37,7 +37,7 @@ feed (`cloud.py`), the Chrome/Edge/Firefox extension (`extension/`), the website
 | App window, tray icon, accounts, feed, messages, settings | Working (`winmain.py`) |
 | Browser extension (Chrome / Edge / Firefox) and the extension bridge | Working; Safari is hidden on Windows on purpose |
 | Warning popup (Edit / Send anyway) | Working (`winoverlay.py`) |
-| Watching desktop AI apps: Enter is held, text read with UI Automation, decision, resend | Working with a stand-in "Claude" app; real ChatGPT/Claude apps still to try (`watcher_win.py`). Clicking a Send button is not watched yet, only Enter |
+| Watching desktop AI apps: Enter and clicks on a Send button are held, text read with UI Automation, decision, resend | Working with a stand-in "Claude" app (Enter: allow, flag and send anyway tested; Send-click: allow tested); real ChatGPT/Claude apps still to try (`watcher_win.py`) |
 | Keyword-rules fallback when the AI is slow | Working: waits 12 s, then uses the keyword rules |
 | Lock-in: minimize blocked windows/browsers, bring the guarded browser back | Working (`winlock.py`, rules in `winlockrules.py`, tested) |
 | Relaunch after a force-quit during a timed lock-in | Working (Task Scheduler job, `winkeepalive.py`) |
