@@ -3,6 +3,7 @@ Shared by the Mac app (main.py) and the Windows app (winmain.py). The host provi
 native_overlay, show_overlay_block(...) and _main(fn, *args) (run something on the UI thread)."""
 import time
 
+import slowai
 import watcher
 
 
@@ -51,10 +52,10 @@ class ExtensionHost:
         if sa and sa[0].strip() == text and time.time() < sa[1]:
             return {'verdict': 'allow'}
         if has_pic:
-            r = self.ai_guard.check_with_images(text, images, cls, asg, where, timeout=15, n_images=n_images)
+            r = slowai.check_with_fallback(self.ai_guard, lambda: self.ai_guard.check_with_images(text, images, cls, asg, where, timeout=15, n_images=n_images), text, cls, asg, wait=15)
             text = (text + ' ' if text else '') + f'[+{max(len(images), n_images)} picture{"s" if max(len(images), n_images) != 1 else ""}]'
         else:
-            r = self.ai_guard.check(text, cls, asg, where, timeout=12)
+            r = slowai.check_with_fallback(self.ai_guard, lambda: self.ai_guard.check(text, cls, asg, where, timeout=12), text, cls, asg, wait=12)
         # Map to the extension's simple contract + details for the warning panel.
         verdict = r.get('verdict', 'allow')
         hard = self.guard.is_hard(r) if r.get('level') == 'flag' else False

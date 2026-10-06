@@ -12,6 +12,7 @@ import threading
 import time
 
 import rules
+import slowai
 
 AI_APP_KEYWORDS = ['claude', 'chatgpt', 'openai', 'gemini', 'perplexity', 'copilot', 'deepseek',
                    'grok', 'mistral', 'poe', 'qwen', 'kimi', 'quillbot']
@@ -461,24 +462,10 @@ class Guard:
                         hook.checking()
                     except Exception:
                         pass
-                # A slow computer can take a long time to run the AI. Wait a few seconds, then fall back to the keyword rules
-                # so Enter is never held for long (the AI result, if it finishes later, is cached for next time).
-                box = {}
-
-                def run_check():
-                    try:
-                        box['r'] = self.ai_guard.check(text, cls, asg, where, timeout=10)
-                    except Exception as e:
-                        box['err'] = e
-                t = threading.Thread(target=run_check, daemon=True)
-                t.start()
-                t.join(WAIT_FOR_AI)
-                r = box.get('r')
-                if r is None:
-                    why = box.get('err') or 'the AI was slow'
-                    diag(f'AI check fallback: {why}')
-                    r = dict(rules.check(text, cls, asg), source='keywords', note=str(why))
-                    r['verdict'] = 'allow' if r['level'] != 'flag' else 'warn'
+                # A slow computer can take a long time to run the AI: wait a few seconds, then use the keyword rules.
+                r = slowai.check_with_fallback(self.ai_guard, lambda: self.ai_guard.check(text, cls, asg, where, timeout=10), text, cls, asg, wait=WAIT_FOR_AI)
+                if r.get('note'):
+                    diag(f'AI check fallback: {r["note"]}')
             diag(f'verdict: level={r.get("level")} source={r.get("source")}')
             self._finish(r, p, cls, asg)
         except Exception as e:
