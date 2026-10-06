@@ -19,11 +19,14 @@ def enabled():
 def fetch():
     """The latest published build as {'build', 'version', 'notes', 'url'}, or None if it can't be reached."""
     try:
-        req = urllib.request.Request(version.SITE + '/version.json?t=%d' % time.time(), headers={'User-Agent': 'HonestHands/%s' % version.VERSION})
+        from platform_info import IS_WIN
+        name = 'version-windows.json' if IS_WIN else 'version.json'          # each system has its own newest build
+        default = '/HonestHands-Setup.exe' if IS_WIN else '/HonestHands.dmg'
+        req = urllib.request.Request(version.SITE + '/' + name + '?t=%d' % time.time(), headers={'User-Agent': 'HonestHands/%s' % version.VERSION})
         with urllib.request.urlopen(req, timeout=10, context=net.context()) as r:
             d = json.loads(r.read().decode())
         return {'build': int(d['build']), 'version': str(d.get('version') or ''), 'notes': str(d.get('notes') or ''),
-                'url': str(d.get('url') or version.SITE + '/HonestHands.dmg')}
+                'url': str(d.get('url') or version.SITE + default)}
     except Exception:
         return None
 

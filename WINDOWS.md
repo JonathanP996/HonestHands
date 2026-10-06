@@ -1,4 +1,4 @@
-# Windows version: plan
+# Windows version: plan and status
 
 Work happens on the `windows` branch. Nothing here changes the Mac app until it is merged.
 
@@ -30,3 +30,22 @@ feed (`cloud.py`), the Chrome/Edge/Firefox extension (`extension/`), the website
 - Typing capture in other apps is the hard part and cannot be fully tested until we run on Windows.
 - The AI model will run on the CPU on many laptops, so checks may take several seconds instead of under one.
 - Windows installs of `llama-cpp-python` need a prebuilt wheel (CPU build is fine).
+
+## Status (tested in a Windows 11 virtual machine)
+| Piece | State |
+| --- | --- |
+| App window, tray icon, accounts, feed, messages, settings | Working (`winmain.py`) |
+| Browser extension (Chrome / Edge / Firefox) and the extension bridge | Working; Safari is hidden on Windows on purpose |
+| Warning popup (Edit / Send anyway) | Working (`winoverlay.py`) |
+| Watching desktop AI apps: Enter is held, text read with UI Automation, decision, resend | Working with a stand-in "Claude" app; real ChatGPT/Claude apps still to try (`watcher_win.py`). Clicking a Send button is not watched yet, only Enter |
+| Keyword-rules fallback when the AI is slow | Working: waits 12 s, then uses the keyword rules |
+| Lock-in: minimize blocked windows/browsers, bring the guarded browser back | Working (`winlock.py`, rules in `winlockrules.py`, tested) |
+| Relaunch after a force-quit during a timed lock-in | Working (Task Scheduler job, `winkeepalive.py`) |
+| Reading text in pictures | Working (Windows.Media.Ocr in `ocr.py`) |
+| Installer | Built and installed in the VM (`build_win.ps1`, `installer.iss`, `.github/workflows/windows.yml`) |
+| Code signing | Not set up (needs an Authenticode certificate; the script signs if CERT_PFX is set) |
+| Updates | Update notice reads `version-windows.json` (staged in `release/`); the installer is downloaded by hand |
+| Alerts | Tray balloons for now; clicking one does not open the app yet |
+| Website download button | Not added (nothing is published) |
+
+Test notes: the virtual machine emulates Intel on an Apple chip, so the AI model is far slower there than on a real PC.

@@ -23,7 +23,7 @@ def _read_text_windows(raw, max_chars):
     async def run():
         stream = InMemoryRandomAccessStream()
         w = DataWriter(stream)
-        w.write_bytes(list(raw))
+        w.write_bytes(raw)
         await w.store_async()
         stream.seek(0)
         bitmap = await (await BitmapDecoder.create_async(stream)).get_software_bitmap_async()

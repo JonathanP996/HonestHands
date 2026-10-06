@@ -2,7 +2,7 @@
 #   dist\HonestHands\HonestHands.exe        the program
 #   dist\HonestHands-Setup.exe              the installer (needs Inno Setup: winget install JRSoftware.InnoSetup)
 # Optional signing: set CERT_PFX (path) and CERT_PASSWORD, and the program and installer get an Authenticode signature.
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'   # PyInstaller writes progress to stderr: that must not stop the script, so check exit codes by hand
 Set-Location $PSScriptRoot
 
 $py = if (Test-Path .\.venv\Scripts\python.exe) { '.\.venv\Scripts\python.exe' } else { 'python' }
@@ -10,6 +10,7 @@ if (-not (Test-Path .\.buildenv)) { & $py -m venv .buildenv }
 $bp = '.\.buildenv\Scripts\python.exe'
 & $bp -m pip install --quiet --upgrade pip
 & $bp -m pip install --quiet --prefer-binary -r requirements.txt --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+if ($LASTEXITCODE -ne 0) { throw 'Installing the requirements failed.' }
 
 # the build number is the same counter the Mac build uses (version.py)
 $ver = (Select-String -Path version.py -Pattern "VERSION = '([^']*)'").Matches[0].Groups[1].Value
@@ -24,6 +25,7 @@ Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
     --hidden-import watcher_win --hidden-import winlock --hidden-import winlockrules --hidden-import winoverlay `
     --hidden-import winkeepalive --hidden-import extension_host --hidden-import bridge --hidden-import bridge_server `
     winmain.py
+if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed.' }
 
 function Sign($file) {
     if ($env:CERT_PFX -and (Test-Path $env:CERT_PFX)) {
@@ -38,7 +40,11 @@ $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "${env:ProgramFiles}
 if ($iscc) {
     & $iscc "/DAppVersion=$ver" "/DAppBuild=$build" installer.iss
     Sign .\dist\HonestHands-Setup.exe
-    Write-Host "Done: dist\HonestHands-Setup.exe"
+    # the update notice for installed copies: staged in release\ and NOT published until you copy it to the website on purpose
+New-Item -ItemType Directory -Force release | Out-Null
+$notes = if ($env:UPDATE_NOTES) { $env:UPDATE_NOTES } else { '' }
+@{ build = [int]$build; version = $ver; notes = $notes; url = 'https://honesthands-site.vercel.app/HonestHands-Setup.exe' } | ConvertTo-Json | Set-Content release\version-windows.json -Encoding utf8
+    Write-Host "Done: dist\HonestHands-Setup.exe  (update notice staged in release\version-windows.json)"
 } else {
     Write-Host "Done: dist\HonestHands\HonestHands.exe  (install Inno Setup to also make the installer)"
 }
