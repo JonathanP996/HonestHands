@@ -82,7 +82,7 @@ MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP = 0x2, 0x4
 SEND_WORDS = re.compile(r'\b(send|submit|run|generate)\b', re.I)     # narrow on purpose: 'message', 'go', 'ask' match unrelated buttons
 SEND_GLYPHS = ('\u2191', '\u2197', '\u27a4', '\u2b06', '\u279c', '\u25b6', '\u21e7', '\u2b95')
 WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x100, 0x101, 0x104, 0x105
-VK_RETURN, VK_SHIFT, VK_MENU, VK_CONTROL = 0x0D, 0x10, 0x12, 0x11
+VK_RETURN, VK_SHIFT, VK_MENU, VK_CONTROL, VK_ESCAPE = 0x0D, 0x10, 0x12, 0x11, 0x1B
 KEYEVENTF_KEYUP = 0x2
 INPUT_KEYBOARD, INPUT_MOUSE = 1, 0
 CLICK_LOOKUP_WAIT = 0.25      # seconds allowed to look at a clicked button before letting the click through
@@ -364,6 +364,14 @@ class Guard:
         try:
             if nCode == 0:
                 k = KBDLLHOOKSTRUCT.from_address(lParam)
+                hook = Guard.overlay_hook
+                if hook is not None and hook.is_open() and k.dwExtraInfo != MARK and k.vkCode in (VK_ESCAPE, VK_RETURN):
+                    # a warning card is showing: Esc / Enter edit the message, Ctrl+Enter sends it anyway
+                    if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                        ctrl = bool(user32.GetAsyncKeyState(VK_CONTROL) & 0x8000)
+                        hook.choose('send_anyway' if (k.vkCode == VK_RETURN and ctrl) else 'edit')
+                        self._swallowed_up = True
+                    return 1                                      # keys and their releases are swallowed while the card is open
                 if k.vkCode == VK_RETURN and k.dwExtraInfo != MARK:
                     if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
                         if self._enter_down():

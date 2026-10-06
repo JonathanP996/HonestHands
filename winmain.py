@@ -94,7 +94,7 @@ class WinApp(extension_host.ExtensionHost):
         self.store.log({'t': time.time(), 'event': 'turned back from ' + app_name, 'class': cls['name'] if cls else '', 'assignment': ''})
         payload = {'hard': True, 'title': 'You’re locked in', 'context': (cls['name'] if cls else 'Study session') + ' · ' + app_name,
                    'reason': reason, 'rule': '', 'quote': '', 'tip': '', 'source': 'session lock', 'allowSend': False,
-                   'okLabel': 'Back to work'}
+                   'okLabel': 'Back to work', 'note': ''}
         if self.native_overlay is None or not self.native_overlay.show(payload, lambda choice: None):
             watcher_win.notify('HonestHands', reason)
 
