@@ -115,6 +115,26 @@ kernel32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
 kernel32.OpenProcess.restype = wt.HANDLE
 kernel32.QueryFullProcessImageNameW.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)]
 kernel32.CloseHandle.argtypes = [wt.HANDLE]
+user32.IsWindowVisible.argtypes = [wt.HWND]
+user32.IsIconic.argtypes = [wt.HWND]
+user32.IsWindow.argtypes = [wt.HWND]
+user32.ShowWindow.argtypes = [wt.HWND, ctypes.c_int]
+user32.SetForegroundWindow.argtypes = [wt.HWND]
+user32.AttachThreadInput.argtypes = [wt.DWORD, wt.DWORD, wt.BOOL]
+user32.GetWindowThreadProcessId.restype = wt.DWORD
+
+
+def exe_of(pid):
+    """The program name (like 'chrome.exe') for a process id, or ''."""
+    h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    exe = ''
+    if h:
+        buf = ctypes.create_unicode_buffer(520)
+        n = wt.DWORD(520)
+        if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+            exe = os.path.basename(buf.value).lower()
+        kernel32.CloseHandle(h)
+    return exe
 
 
 def front_window():

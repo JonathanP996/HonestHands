@@ -21,6 +21,7 @@ import bridge_server
 import cloud
 import extension_host
 import updates
+import winlock
 import winoverlay
 from ai_guard import AIGuard
 from bridge import Api
@@ -56,6 +57,7 @@ class WinApp(extension_host.ExtensionHost):
         self.api = None
         self.cloud = cloud.Cloud(self.store, self)
         self.updater = updates.Updater(self.store, self._update_found)
+        self.lock = winlock.SessionLock(self.store, self._lock_message, watcher_win.is_ai_app)
         self.api = Api(self)
         self.cloud.app = self
         self.window = None
@@ -83,7 +85,13 @@ class WinApp(extension_host.ExtensionHost):
                 print('[lock] tick problem:', e, flush=True)
 
     def _lock_message(self, reason, app_name):
-        watcher_win.notify('HonestHands', reason)
+        """Tell the student why they were turned back, and note it in the activity log."""
+        cls, asg = self.store.session_targets()
+        self.store.log({'t': time.time(), 'event': 'turned back from ' + app_name, 'class': cls['name'] if cls else '', 'assignment': ''})
+        payload = {'hard': True, 'title': 'You’re locked in', 'context': (cls['name'] if cls else 'Study session') + ' · ' + app_name,
+                   'reason': reason, 'rule': '', 'quote': '', 'tip': '', 'source': 'session lock', 'allowSend': False}
+        if self.native_overlay is None or not self.native_overlay.show(payload, lambda choice: None):
+            watcher_win.notify('HonestHands', reason)
 
     def _update_found(self, latest):
         watcher_win.notify('HonestHands', 'A new version is ready. Open HonestHands to update.', 'home')
@@ -173,6 +181,7 @@ class WinApp(extension_host.ExtensionHost):
         self.engine.autostart()
         self.cloud.start()
         self.updater.start()
+        self.lock.start()
         threading.Thread(target=self._lock_tick, daemon=True).start()
         watcher_win.Guard.block_handler = self.show_overlay_block
         watcher_win.Guard.overlay_hook = self.native_overlay
