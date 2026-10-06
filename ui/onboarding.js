@@ -20,9 +20,18 @@ const oicon = (k, cls = '') => `<svg class="oi ${cls}" viewBox="0 0 24 24" fill=
 const CHECK = '<svg class="ocheck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 function onbStructSig() {
+  // Only what the CURRENT step draws counts. A flag that belongs to another step (the extension pinging, a sign-in
+  // refresh, the guard hooking in) must never rebuild this page, or it looks like it keeps reloading.
   const e = S.engine, p = S.perms || {};
-  return [ONB, S.classes.length, e.state, e.ready, p.accessibility, p.watching, S.ext_live, ONB_FLAGS.notifTried, ONB_FLAGS.notifOk,
-          !!(S.extension && S.extension.installed_dir), S.browser && S.browser.chosen, S.cloud_user && S.cloud_user.signed_in, ONB_ACCT.mode].join('|');
+  const per = [
+    [],                                                                                        // welcome
+    [p.accessibility, p.watching, ONB_FLAGS.notifTried, ONB_FLAGS.notifOk],                    // access
+    [e.state, e.ready],                                                                        // AI (progress ticks in place)
+    [S.ext_live, !!(S.extension && S.extension.installed_dir), S.browser && S.browser.chosen], // browser
+    [S.cloud_user && S.cloud_user.signed_in, ONB_ACCT.mode],                                   // account
+    [S.classes.length],                                                                        // class
+  ];
+  return [ONB].concat(per[ONB] || []).join('|');
 }
 
 function onbProgress(i) {
