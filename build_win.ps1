@@ -43,7 +43,7 @@ if ($iscc) {
     # the update notice for installed copies: staged in release\ and NOT published until you copy it to the website on purpose
 New-Item -ItemType Directory -Force release | Out-Null
 $notes = if ($env:UPDATE_NOTES) { $env:UPDATE_NOTES } else { '' }
-@{ build = [int]$build; version = $ver; notes = $notes; url = 'https://honesthands-site.vercel.app/HonestHands-Setup.exe' } | ConvertTo-Json | Set-Content release\version-windows.json -Encoding utf8
+@{ build = [int]$build; version = $ver; notes = $notes; url = 'https://honesthands-site.vercel.app/HonestHands-Setup.exe' } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText((Join-Path (Get-Location) 'release\version-windows.json'), $_, (New-Object Text.UTF8Encoding($false))) }
     Write-Host "Done: dist\HonestHands-Setup.exe  (update notice staged in release\version-windows.json)"
 } else {
     Write-Host "Done: dist\HonestHands\HonestHands.exe  (install Inno Setup to also make the installer)"

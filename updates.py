@@ -24,7 +24,7 @@ def fetch():
         default = '/HonestHands-Setup.exe' if IS_WIN else '/HonestHands.dmg'
         req = urllib.request.Request(version.SITE + '/' + name + '?t=%d' % time.time(), headers={'User-Agent': 'HonestHands/%s' % version.VERSION})
         with urllib.request.urlopen(req, timeout=10, context=net.context()) as r:
-            d = json.loads(r.read().decode())
+            d = json.loads(r.read().decode('utf-8-sig'))
         return {'build': int(d['build']), 'version': str(d.get('version') or ''), 'notes': str(d.get('notes') or ''),
                 'url': str(d.get('url') or version.SITE + default)}
     except Exception:
