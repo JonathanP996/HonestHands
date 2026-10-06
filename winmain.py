@@ -184,6 +184,7 @@ class WinApp(extension_host.ExtensionHost):
     def on_started(self):
         self._start_tray()
         self.engine.autostart()
+        self.ai_guard.prebuild()
         self.cloud.start()
         self.updater.start()
         self.lock.start()
