@@ -296,6 +296,8 @@ def ai_domain(url):
     # Google's "AI Mode" is a chat that lives on the normal search page (udm=50), so the address alone doesn't give it away.
     if re.match(r'^(www\.)?google\.[a-z.]+$', host) and 'udm=50' in (u.query or '').split('#')[0].split('&'):
         return 'Google AI Mode'
+    if re.match(r'^(www\.)?google\.[a-z.]+$', host) and u.path in ('', '/', '/search'):
+        return 'Google search'                       # the search bar is used as an AI; short plain searches are skipped in intercept
     for d in AI_DOMAINS:
         if host == d or host.endswith('.' + d):
             return d
@@ -758,6 +760,8 @@ class Guard:
                     p['pictures'] = count_pictures(p.get('box'))
                 except Exception:
                     p['pictures'] = 0
+            if p and p.get('where') == 'Google search' and not (len(p['text'].split()) >= 4 or '?' in p['text']):
+                p = None                                   # a short plain search isn't a question to an AI
             if not p or not (p['text'] or p.get('pictures')):
                 dbg('intercept: no text, no picture -> ALLOW')
                 self._release()

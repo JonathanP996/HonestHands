@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HonestHands Guard",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Works with the HonestHands desktop app to keep AI use honest. Does nothing unless the app is running and a study session is active.",
   "permissions": [
     "storage",
@@ -41,7 +41,8 @@
     {
       "matches": [
         "https://www.google.com/search*",
-        "https://www.google.com/"
+        "https://www.google.com/",
+        "https://www.google.com/webhp*"
       ],
       "js": [
         "aimode.js"
