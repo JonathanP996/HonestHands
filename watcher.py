@@ -481,6 +481,22 @@ def cache_still_valid(entry, title_now, frame):
     return bool(entry and entry.get('title') == title_now and frame and frame[2] > 0 and frame[3] > 0)
 
 
+_CHECKED = {}
+
+
+def _qkey(t):
+    return re.sub(r'\s+', ' ', (t or '').lower().replace('+', ' ')).strip()
+
+
+def mark_checked(text):
+    """Remember a message that was just checked, so the browser extension doesn't check the same search a second time."""
+    _CHECKED[_qkey(text)] = time.time()
+
+
+def recently_checked(text, within=30):
+    return time.time() - _CHECKED.get(_qkey(text), 0) < within
+
+
 def looks_like_search(t):
     """True if what's in the browser's address bar will be sent to a search engine (words, or a single word with no dot), not opened as a site."""
     t = (t or '').strip()
@@ -904,6 +920,8 @@ class Guard:
                 CGEventPost(kCGHIDEventTap, ev)
 
     def record(self, p, cls, asg, trigger, result, r):
+        if result.startswith('ok') or result.startswith('sent'):
+            mark_checked(p.get('text', ''))
         entry = {'t': time.time(), 'where': p['where'], 'class': cls['name'],
                  'assignment': asg['name'] if asg else '', 'trigger': trigger,
                  'text': (p['text'][:300] + (' [+%d picture%s]' % (p['pictures'], 's' if p['pictures'] > 1 else '') if p.get('pictures') else '')).strip(), 'result': result}
