@@ -291,7 +291,11 @@ def page_url(el):
 
 
 def ai_domain(url):
-    host = (urlparse(url).hostname or '').lower()
+    u = urlparse(url)
+    host = (u.hostname or '').lower()
+    # Google's "AI Mode" is a chat that lives on the normal search page (udm=50), so the address alone doesn't give it away.
+    if re.match(r'^(www\.)?google\.[a-z.]+$', host) and 'udm=50' in (u.query or '').split('#')[0].split('&'):
+        return 'Google AI Mode'
     for d in AI_DOMAINS:
         if host == d or host.endswith('.' + d):
             return d
@@ -429,6 +433,38 @@ def find_composer(appel, focused):
     return best[0]
 
 
+def count_pictures(box):
+    """How many picture thumbnails sit at the message box (a picture attached to the message you're about to send).
+    Looks around the box through Accessibility; a thumbnail far above it is an old message, not this one."""
+    cf = _frame_of(box)
+    if box is None or cf is None:
+        return 0
+    root = box
+    for _ in range(6):
+        up = ax(root, 'AXParent')
+        if up is None or ax(up, 'AXRole') in ('AXWebArea', 'AXWindow'):
+            break
+        root = up
+    seen = [0]
+    n = [0]
+
+    def walk(node, depth):
+        if node is None or depth > 7 or seen[0] > 400:
+            return
+        seen[0] += 1
+        if ax(node, 'AXRole') == 'AXImage':
+            f = _frame_of(node)
+            if f and f[2] >= 40 and f[3] >= 40 and f[1] + f[3] >= cf[1] - 300 and f[1] <= cf[1] + cf[3] + 60 \
+                    and f[0] + f[2] >= cf[0] - 60 and f[0] <= cf[0] + cf[2] + 60:
+                n[0] += 1
+            return
+        for child in (ax(node, 'AXChildren') or [])[:40]:
+            walk(child, depth + 1)
+
+    walk(root, 0)
+    return n[0]
+
+
 _LAST = {'where': None, 'text': '', 'pid': None, 't': 0.0}
 _CCACHE = {}   # pid -> {'box', 'where', 't', 'title'}: the composer, found once and reused (a full page scan is slow)
 
@@ -519,7 +555,7 @@ def current_prompt(retries=3):
         # The composer just cleared (sent). Use what we saw a moment ago.
         text = _LAST['text']
 
-    return {'where': where, 'text': text, 'pid': pid, 'app': name, 'bid': bid}
+    return {'where': where, 'text': text, 'pid': pid, 'app': name, 'bid': bid, 'box': box}
 
 
 def remember_typed():
@@ -717,8 +753,13 @@ class Guard:
             p = current_prompt()
             dbg(f'timing: read prompt {int((time.time() - self._t_start) * 1000)} ms')
             dbg('intercept: where=', (p or {}).get('where'), 'text=', repr((p or {}).get('text','')[:60]))
-            if not p or not p['text']:
-                dbg('intercept: no text -> ALLOW')
+            if p:
+                try:
+                    p['pictures'] = count_pictures(p.get('box'))
+                except Exception:
+                    p['pictures'] = 0
+            if not p or not (p['text'] or p.get('pictures')):
+                dbg('intercept: no text, no picture -> ALLOW')
                 self._release()
                 return True
             if time.time() < self.bypass_until and p['pid'] == self.bypass_pid:
@@ -739,8 +780,8 @@ class Guard:
                 self.record(p, cls, asg, trigger, 'warned', r)
                 AppHelper.callAfter(self.show_warning, r, True, p, cls, asg)
                 return False
-            r = self.ai_guard.cached(p['text'], cls, asg)
-            if r is None and (rules.check(p['text'], cls, asg).get('evade') or not self.ai_guard.engine.ready()):
+            r = None if p.get('pictures') else self.ai_guard.cached(p['text'], cls, asg)
+            if r is None and not p.get('pictures') and (rules.check(p['text'], cls, asg).get('evade') or not self.ai_guard.engine.ready()):
                 r = self.ai_guard.check(p['text'], cls, asg, p['where'])  # no AI, instant
             if r is not None:
                 dbg('intercept: cached/instant verdict =', r.get('verdict'), 'level=', r.get('level'))
@@ -770,7 +811,10 @@ class Guard:
 
     def _guard_then_send(self, p, cls, asg, trigger, loc):
         try:
-            r = self.ai_guard.check(p['text'], cls, asg, p['where'], timeout=10)
+            if p.get('pictures'):
+                r = self.ai_guard.check_with_images(p['text'], [], cls, asg, p['where'], timeout=10, n_images=p['pictures'])
+            else:
+                r = self.ai_guard.check(p['text'], cls, asg, p['where'], timeout=10)
             dbg('async guard done: verdict=', r.get('verdict'), 'level=', r.get('level'), 'source=', r.get('source'))
         except Exception as e:
             dbg('async guard ERROR:', e, '-> defaulting')
@@ -844,7 +888,7 @@ class Guard:
     def record(self, p, cls, asg, trigger, result, r):
         entry = {'t': time.time(), 'where': p['where'], 'class': cls['name'],
                  'assignment': asg['name'] if asg else '', 'trigger': trigger,
-                 'text': p['text'][:300], 'result': result}
+                 'text': (p['text'][:300] + (' [+%d picture%s]' % (p['pictures'], 's' if p['pictures'] > 1 else '') if p.get('pictures') else '')).strip(), 'result': result}
         if r:
             entry['source'] = r.get('source')
             entry['ms'] = r.get('ms')
