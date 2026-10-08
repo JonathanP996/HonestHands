@@ -72,3 +72,38 @@ chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'hh') appStatus(); });
 // Fire one ping as soon as the worker loads/wakes for any reason.
 ensureAlarm();
 appStatus();
+
+// --- every internet search is checked, however it was started (Enter, a suggestion, the new-tab box, a link) ---
+// The tab is parked on a "checking" page while the app decides; an allowed search then goes ahead, a flagged one stays held.
+const ALLOWED = new Map();                      // query -> time until which it may go through without another check
+function searchQuery(u) {
+  try {
+    const x = new URL(u), h = x.hostname.replace(/^www\./, '');
+    if (/^google\.[a-z.]+$/.test(h) && x.pathname === '/search') return x.searchParams.get('q');
+    if (h === 'bing.com' && x.pathname === '/search') return x.searchParams.get('q');
+    if (h === 'duckduckgo.com' && (x.pathname === '/' || x.pathname === '/html')) return x.searchParams.get('q');
+    if (h === 'search.brave.com' && x.pathname === '/search') return x.searchParams.get('q');
+    if (h === 'search.yahoo.com' && x.pathname === '/search') return x.searchParams.get('p');
+    if (h === 'ecosia.org' && x.pathname === '/search') return x.searchParams.get('q');
+  } catch (e) { /* not a URL */ }
+  return null;
+}
+const norm = (q) => q.toLowerCase().replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
+chrome.webNavigation.onBeforeNavigate.addListener(async (d) => {
+  if (d.frameId !== 0) return;
+  const q = searchQuery(d.url);
+  if (!q || !q.trim()) return;
+  const k = norm(q);
+  const until = ALLOWED.get(k);
+  if (until && Date.now() < until) return;
+  const st = await appStatus();
+  if (!st.active) return;
+  chrome.tabs.update(d.tabId, { url: chrome.runtime.getURL('hold.html') });
+  const v = await appCheck(q, 'Browser search', d.url, [], 0);
+  if (!v || v.active === false || v.verdict === 'allow') {
+    ALLOWED.set(k, Date.now() + 30000);
+    chrome.tabs.update(d.tabId, { url: d.url });
+  } else {
+    chrome.tabs.update(d.tabId, { url: chrome.runtime.getURL('hold.html') + '#held' });
+  }
+});

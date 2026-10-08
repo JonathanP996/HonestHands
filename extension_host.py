@@ -45,6 +45,8 @@ class ExtensionHost:
         if not text and not has_pic:
             return {'verdict': 'allow'}
         where = site or 'browser'
+        if where == 'Browser search' and watcher.recently_checked(text):
+            return {'verdict': 'allow'}                      # the keyboard check already handled this one
         hook = getattr(self, 'native_overlay', None)
         if hook is not None and (has_pic or not self.ai_guard.cached(text, cls, asg)):
             self._main(hook.checking)
