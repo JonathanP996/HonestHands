@@ -985,7 +985,12 @@ class Guard:
         # composer's horizontal band (right side, where send sits) or on any control there,
         # treat it as a send gesture.
         p = current_prompt()
-        if not p or not p['text']:
+        if p and not p['text']:
+            try:
+                p['pictures'] = count_pictures(p.get('box'))        # a picture alone is a message too
+            except Exception:
+                p['pictures'] = 0
+        if not p or not (p['text'] or p.get('pictures')):
             dbg('click_is_send: no unsent text -> not a send')
             return False
         # Position check FIRST: the click must land in/near the composer box. This is what
