@@ -297,7 +297,7 @@ def ai_domain(url):
     if re.match(r'^(www\.)?google\.[a-z.]+$', host) and 'udm=50' in (u.query or '').split('#')[0].split('&'):
         return 'Google AI Mode'
     if re.match(r'^(www\.)?google\.[a-z.]+$', host) and u.path in ('', '/', '/search'):
-        return 'Google search'                       # the search bar is used as an AI; short plain searches are skipped in intercept
+        return 'Google search'                       # the search bar is used as an AI
     for d in AI_DOMAINS:
         if host == d or host.endswith('.' + d):
             return d
@@ -481,6 +481,16 @@ def cache_still_valid(entry, title_now, frame):
     return bool(entry and entry.get('title') == title_now and frame and frame[2] > 0 and frame[3] > 0)
 
 
+def looks_like_search(t):
+    """True if what's in the browser's address bar will be sent to a search engine (words, or a single word with no dot), not opened as a site."""
+    t = (t or '').strip()
+    if not t or re.match(r'^[a-z][a-z0-9+.-]*://', t, re.I) or re.match(r'^(about|chrome|file|view-source|edge|brave):', t, re.I):
+        return False
+    if re.search(r'\s', t):
+        return True
+    return not re.match(r'^(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?([/?#]\S*)?$', t, re.I)
+
+
 def current_prompt(retries=3):
     """What you're about to send, or None if not in an AI context. Searches the window for
     the composer so a click on Send is caught, and remembers the last non-empty text so a
@@ -497,6 +507,12 @@ def current_prompt(retries=3):
     text = ''
     box = None
     fast = False
+    focus0 = ax(appel, 'AXFocusedUIElement')
+    if bid in BROWSERS and focus0 is not None and _is_address_bar(focus0):
+        t = read_text(focus0).strip()                      # typed into the address bar: a search goes to an internet search engine
+        if looks_like_search(t):
+            return {'where': 'Browser search', 'text': t, 'pid': pid, 'app': name, 'bid': bid, 'box': None}
+        return None
     c = _CCACHE.get(pid)
     title_now = _window_title(appel)
     if c and time.time() - c['t'] < 20 and ax(c['box'], 'AXRole') is not None and cache_still_valid(c, title_now, _frame_of(c['box'])):
@@ -760,8 +776,6 @@ class Guard:
                     p['pictures'] = count_pictures(p.get('box'))
                 except Exception:
                     p['pictures'] = 0
-            if p and p.get('where') == 'Google search' and not (len(p['text'].split()) >= 4 or '?' in p['text']):
-                p = None                                   # a short plain search isn't a question to an AI
             if not p or not (p['text'] or p.get('pictures')):
                 dbg('intercept: no text, no picture -> ALLOW')
                 self._release()
