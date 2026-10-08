@@ -408,6 +408,8 @@ class App(extension_host.ExtensionHost):
         native = getattr(self, 'native_overlay', None)
         if native is not None:
             reason = r.get('reason') or (r.get('reasons') or ['This looks like it breaks a rule for this class.'])[0]
+            if p.get('where') in ('Browser search', 'Google search', 'google.com search'):
+                reason = 'A search like this gets an AI-written answer at the top (Google\'s AI Overview). ' + reason
             payload = {
                 'hard': bool(hard), 'title': 'Message blocked' if hard else 'Hold on a second',
                 'context': cls['name'] + (f' / {asg["name"]}' if asg else '') + ' · ' + p.get('where', ''),

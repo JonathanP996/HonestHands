@@ -11,13 +11,34 @@ const APP = 'http://127.0.0.1:7673';
 const BROWSER = (() => { const ua = navigator.userAgent; if (/Edg\//.test(ua)) return 'edge'; if (/Firefox\//.test(ua)) return 'firefox'; if (/Chrome\//.test(ua)) return 'chrome'; return 'safari'; })();
 
 async function appStatus() {
+  let res;
   try {
     const r = await fetch(APP + '/status?b=' + BROWSER, { method: 'GET' });
     const j = await r.json();
-    return { active: !!j.active, reachable: true };
+    res = { active: !!j.active, reachable: true };
   } catch (e) {
-    return { active: false, reachable: false };
+    res = { active: false, reachable: false };
   }
+  syncRules(res.active);
+  return res;
+}
+
+// While a session is on, Google searches open as "Web" results (udm=14), which have no AI Overview, and AI Mode (udm=50) is
+// sent there too. This also covers searches typed into the address bar. Other result types (Images, News...) keep their own udm.
+// Off when no session is on or the app isn't running.
+let rulesOn = null;
+function syncRules(active) {
+  if (!chrome.declarativeNetRequest || rulesOn === active) return;
+  rulesOn = active;
+  const rules = active ? [
+    { id: 1, priority: 3, action: { type: 'redirect', redirect: { transform: { queryTransform: { addOrReplaceParams: [{ key: 'udm', value: '14' }] } } } },
+      condition: { regexFilter: '^https://www\\.google\\.com/search.*[?&]udm=50(&|$)', resourceTypes: ['main_frame'] } },
+    { id: 2, priority: 2, action: { type: 'allow' },
+      condition: { regexFilter: '^https://www\\.google\\.com/search.*[?&]udm=', resourceTypes: ['main_frame'] } },
+    { id: 3, priority: 1, action: { type: 'redirect', redirect: { transform: { queryTransform: { addOrReplaceParams: [{ key: 'udm', value: '14' }] } } } },
+      condition: { regexFilter: '^https://www\\.google\\.com/search\\?', resourceTypes: ['main_frame'] } }
+  ] : [];
+  chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [1, 2, 3], addRules: rules }).catch(() => { rulesOn = null; });
 }
 
 async function appCheck(text, site, url, images, nImages) {
