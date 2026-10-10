@@ -104,8 +104,12 @@ def analyze(engine, text, kind='class', name=''):
     result = {'policy': policy_guess or 'tutor', 'rules': [], 'examples': [], 'dropped': 0, 'used_ai': False,
               'note': '', 'source_text': text[:(80000 if kind != 'class' else 40000)], 'policy_text': policy_text, 'category_reason': ''}
     if not policy_text:
-        result['note'] = ('No mention of AI or outside help was found in this document. '
-                          'Type or paste the rules into the box if there are any.')
+        if kind == 'class':
+            result['note'] = ('No mention of AI or outside help was found in this document. '
+                              'Type or paste the rules into the box if there are any.')
+        else:
+            result['note'] = ('This assignment doesn\'t say anything about AI, so the class rules still apply. '
+                              'Save it anyway: HonestHands keeps the assignment so it can tell when you paste its questions or your work into a chat.')
         return result
     if kind == 'class' and engine.ready():
         try:
