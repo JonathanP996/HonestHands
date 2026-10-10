@@ -354,9 +354,9 @@ function reviewDraft(kind, classId, draft, meta) {
   const node = el(`<div><h2>${isClass ? 'Your professor\'s rules for ' : 'AI rules for '}${h(draft.name)}</h2>
     <p class="sub">${isClass
       ? 'This is the part of the syllabus about AI, copied as written. For every message you send, the guard reads it and decides like the professor would: peer-style collaboration, or cheating? Edit it if anything is missing or wrong.'
-      : 'Anything this assignment says about AI or outside help. It applies on top of the class rules.'}</p>
-    ${meta && meta.note ? `<div class="banner warn"><div class="small">${h(meta.note)}</div></div>` : ''}
-    <div class="field"><textarea id="ptext" rows="${isClass ? 13 : 7}" placeholder="Paste or type the AI / collaboration rules here">${h(draft.policy_text || '')}</textarea></div>
+      : 'Anything this assignment says about AI or outside help, on top of the class rules. Even if it says nothing, save it: the guard uses the assignment to tell when you paste its questions or your work into a chat.'}</p>
+    ${meta && meta.note ? `<div class="banner ${isClass ? 'warn' : 'info'}"><div class="small">${h(meta.note)}</div></div>` : ''}
+    <div class="field"><textarea id="ptext" rows="${isClass ? 13 : 7}" placeholder="${isClass ? 'Paste or type the AI / collaboration rules here' : 'Leave this empty if the assignment has no AI rules'}">${h(draft.policy_text || '')}</textarea></div>
     ${isClass ? `<div class="field"><label>Color</label><div class="swatches" id="swatches">${COLORS.map(k => `<button type="button" class="sw cc-${k} ${draft.color === k ? 'on' : ''}" data-col="${k}" aria-label="${k}"></button>`).join('')}</div></div>` : ''}
     ${isClass ? `<div class="catline"><span class="muted small">Label:</span>
       <select id="pol" class="mini">${Object.entries(S.policy_labels).map(([k,v])=>`<option value="${k}" ${draft.policy===k?'selected':''}>${h(v)}</option>`).join('')}</select>
