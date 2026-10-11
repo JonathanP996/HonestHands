@@ -73,6 +73,15 @@ Answer copies=false if the message only asks what something means, how an idea o
 
 Reply with JSON only: {"copies": true|false, "which": "<letter of the question, or empty>"}"""
 
+PIC_INTENT_SYSTEM = """A student attached a picture (of a problem, notes, or their own work) to a message for an AI chatbot. Read ONLY what the student typed, not the picture.
+Does the student ask the AI to produce the answer, solution, or finished work for them (solve it, answer it, complete it, write it, "do this", "what's the answer")? Or only to do something with work they already have (convert, typeset, format, transcribe, proofread, check, explain, summarize)?
+If it is unclear, answer true.
+
+Reply with JSON only: {"does_work": true|false}"""
+
+# A checklist item that bans putting the question itself (text, photo, screenshot) into an AI, whatever is asked about it
+SHARE_ITEM = re.compile(r"\b(cop(y|ying)|past(e|ing)|upload\w*|shar(e|ing)|post(ing)?|screenshot\w*|pictures?|photos?|images?|input(ting)?|enter(ing)?|submit\w*)\b[^.]{0,60}\b(question|problem|assignment|homework|prompt)s?\b|\b(question|problem|assignment|homework|prompt)s?\b[^.]{0,60}\b(cop(y|ied)|past(e|ed)|upload\w*|shar(e|ed)|screenshot\w*|pictures?|photos?|images?)\b", re.I)
+
 HW_ITEM = re.compile(r"\b(question|problem|solve|answer|solution|homework|assignment|share)\w*", re.I)
 
 PERMISSION = re.compile(r"^\W*(?:you|students?)\s+(?:can|may|are welcome to|are free to)\s+(?!not\b|never\b)|^\W*feel free|^\W*it is (?:fine|okay|ok|appropriate) to", re.I)
@@ -604,20 +613,36 @@ class AIGuard:
                 r['reasons'] = [r['reason']] + [x for x in (r.get('reasons') or [])[1:]]
             return r
 
+        def asks_for_work():
+            """From the typed words alone: is the student asking the AI to do the work (True), or to do something with work they already have?"""
+            try:
+                raw = self.engine.chat_raw(PIC_INTENT_SYSTEM, f'Message the student typed:\n<<<\n{text[:600]}\n>>>', timeout=min(timeout, 10), max_tokens=20)
+                return not re.search(r'"does_work"\s*:\s*false', raw, re.I)
+            except Exception:
+                return True                                                # can't tell: be careful
+
+        typed = len(text.split()) >= 2
+        items = self.items_for(cls, asg, wait=min(timeout, 12))
+        gate = [f for f in (items or {}).get('forbidden', []) if HW_ITEM.search(f['item'])]
+        share = [f for f in (items or {}).get('forbidden', []) if SHARE_ITEM.search(f['item'] + ' ' + f.get('quote', ''))]
+        base = self.check(text, cls, asg, where, timeout=timeout, use_cache=use_cache) if typed else None
+        if base and base.get('verdict') != 'allow':
+            return tag(base)                                               # what the student typed is a problem on its own
+        # What the student asks for decides it. A picture of the problem next to "convert my finished work to LaTeX" is fine unless the
+        # class says never to put the question (or a photo of it) into an AI.
+        if typed and not share and self.engine.ready() and not asks_for_work():
+            return tag(base)
+
         if len(blob) >= 20:                                            # readable: judge it like typed text
             combined = (text + '\n\n' if text else '') + '[Text read from the attached picture]\n' + blob
             return tag(self.check(combined, cls, asg, where, timeout=timeout, use_cache=use_cache))
         # a picture with no readable text (a photo, handwriting, a diagram): we can't see what it holds
-        base = self.check(text, cls, asg, where, timeout=timeout, use_cache=use_cache) if text else None
-        items = self.items_for(cls, asg, wait=min(timeout, 12))
-        gate = [f for f in (items or {}).get('forbidden', []) if HW_ITEM.search(f['item'])]
-        if base and base.get('verdict') != 'allow' and (len(text) > 12 or not gate):
-            return tag(base)                              # the typed message is a problem on its own
-        if gate:
+        if gate or share:
             reason = ("You attached a picture the guard can't read. This policy doesn't allow sharing assignment questions or your work "
                       "with an AI, and a picture is an easy way around that.")
+            f = (share or gate)[0]
             res = {'level': 'flag', 'hard': False, 'reason': reason, 'rule': "Don't share assignment questions or your work with the AI",
-                   'quote': gate[0]['quote'], 'tip': 'Type your own question about the idea, without attaching the assignment or your answer.',
+                   'quote': f['quote'], 'tip': 'Type your own question about the idea, without attaching the assignment or your answer.',
                    'verdict': 'warn', 'source': 'ai', 'reasons': [reason]}
             return tag(res)
         return tag(base or {'level': 'ok', 'hard': False, 'reasons': [], 'tip': '', 'verdict': 'allow', 'source': 'ai'})
