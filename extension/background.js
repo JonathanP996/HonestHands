@@ -98,6 +98,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (d) => {
   if (until && Date.now() < until) return;
   const st = await appStatus();
   if (!st.active) return;
+  if (rulesOn) return;                          // the AI Overview and AI Mode are switched off, so this is only an ordinary search
   chrome.tabs.update(d.tabId, { url: chrome.runtime.getURL('hold.html') });
   const v = await appCheck(q, 'Browser search', d.url, [], 0);
   if (!v || v.active === false || v.verdict === 'allow') {

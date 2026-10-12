@@ -566,7 +566,8 @@ class AIGuard:
                     'verdict': 'allow', 'source': 'ai'}
         f = items['forbidden'][n - 1]
         s = re.search(r'"suggestion"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-        reason = 'This asks the AI to ' + (f['item'][:1].lower() + f['item'][1:]).rstrip('.') + '.'
+        what = re.sub(r'^(ask|use|have|get|tell)\s+(the\s+|an?\s+)?(ai|a\.i\.|chatgpt|chatbot|it)\s+to\s+', '', f['item'].strip(), flags=re.I)
+        reason = 'This asks the AI to ' + (what[:1].lower() + what[1:]).rstrip('.') + '.'
         res = {'level': 'flag', 'hard': False, 'reason': reason, 'rule': f['item'], 'quote': f['quote'],
                'tip': (s.group(1).strip() if s and s.group(1).strip() else rules.TIPS.get(cls.get('policy'), rules.TIPS['tutor'])),
                'verdict': 'warn', 'source': 'ai'}
