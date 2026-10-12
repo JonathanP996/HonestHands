@@ -24,6 +24,7 @@ from AppKit import (
 from Foundation import NSObject
 from PyObjCTools import AppHelper
 
+import browsers
 import watcher
 import bridge_server
 from bridge import Api
@@ -321,6 +322,10 @@ class App(extension_host.ExtensionHost):
         threading.Thread(target=_warm_when_ready, daemon=True).start()
         self.guard.start_typing_watch()
         watcher.Guard.block_handler = self.show_overlay_block
+        def _overview_off(bid):
+            k = browsers.key_for_bundle(bid)
+            return bool(k and browsers.BROWSERS[k]['kind'] == 'chromium' and self.extension_seen_recently(k))
+        watcher.Guard.ai_overview_off = _overview_off
         try:
             import overlay_client
             self.native_overlay = overlay_client.create_backend()

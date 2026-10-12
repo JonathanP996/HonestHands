@@ -497,6 +497,16 @@ def recently_checked(text, within=30):
     return time.time() - _CHECKED.get(_qkey(text), 0) < within
 
 
+def search_is_plain(bid):
+    """A search in this browser needs no check when the HonestHands extension is switching Google's AI Overview and AI Mode off:
+    the results are ordinary web results then, not an AI answer."""
+    fn = Guard.ai_overview_off
+    try:
+        return bool(fn and fn(bid))
+    except Exception:
+        return False
+
+
 def looks_like_search(t):
     """True if what's in the browser's address bar will be sent to a search engine (words, or a single word with no dot), not opened as a site."""
     t = (t or '').strip()
@@ -526,7 +536,7 @@ def current_prompt(retries=3):
     focus0 = ax(appel, 'AXFocusedUIElement')
     if bid in BROWSERS and focus0 is not None and _is_address_bar(focus0):
         t = read_text(focus0).strip()                      # typed into the address bar: a search goes to an internet search engine
-        if looks_like_search(t):
+        if looks_like_search(t) and not search_is_plain(bid):
             return {'where': 'Browser search', 'text': t, 'pid': pid, 'app': name, 'bid': bid, 'box': None}
         return None
     c = _CCACHE.get(pid)
@@ -550,6 +560,8 @@ def current_prompt(retries=3):
             probe = None  # don't let the URL bar decide the site
         box = find_composer(appel, focused)
         where = where_am_i(app, box or probe or focused, appel)
+        if where == 'Google search' and search_is_plain(bid):
+            return None                                    # the AI Overview is off in this browser, so this is just a search
         if where is None:
             if AIG_DEBUG and bid in BROWSERS:
                 chain, n = [], focused or box
@@ -943,6 +955,7 @@ class Guard:
     block_handler = None
     on_override = None    # set by the app: called right after an override is logged (so it syncs at once)
     overlay_hook = None   # set by the app: is_open(), owns_point(x, y), choose(choice)
+    ai_overview_off = None  # set by the app: fn(bundle_id) -> True when the browser's extension is turning Google's AI Overview off
 
     def show_warning(self, r, hard, p, cls, asg):
         try:
