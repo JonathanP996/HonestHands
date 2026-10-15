@@ -572,3 +572,7 @@ window.addEventListener('pywebviewready', async () => {
     } catch (_) {}
   }, 1500);
 });
+
+// the opening animation (see body.boot in style.css); taken off again once it has played so later changes don't replay it
+document.body.classList.add('boot');
+setTimeout(() => document.body.classList.remove('boot'), 1700);
