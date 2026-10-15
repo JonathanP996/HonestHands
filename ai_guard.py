@@ -199,7 +199,7 @@ def build_prompt(text, cls, asg, where):
 
 
 # Saved checklists are tied to the instructions that wrote them: change those and every checklist is rebuilt the next time.
-EXTRACT_VERSION = hashlib.sha1((EXTRACT_SYSTEM + EXTRACT_MORE_SYSTEM + VERIFY_SYSTEM + 'filter2').encode()).hexdigest()[:8]
+EXTRACT_VERSION = hashlib.sha1((EXTRACT_SYSTEM + EXTRACT_MORE_SYSTEM + VERIFY_SYSTEM + 'filter3').encode()).hexdigest()[:8]
 
 
 _STOP = set('ai a i the a an to of for your you with use using ask asking it in on or and from any own get give have make do help this that them they be is are not no into about'.split())
@@ -225,6 +225,36 @@ def _drop_unsupported(items):
         if key:
             seen[key] = True
         out.append(f)
+    return out
+
+
+_PERMIT = re.compile(r"(?:more than welcome to|welcome to|encouraged to|free to|appropriate to|permitted to|allowed to|(?:you|students?)\s+(?:can|may)(?!\s+(?:not|never)\b))\s+([^.;:]{6,200})", re.I)
+
+
+def _permission_clauses(policy):
+    """What the policy says students MAY do, copied from its own words ("you are more than welcome to ask it about LaTeX commands").
+    Done in code, not by the model, so nothing is invented, and so the classifier sees the permitted half of a sentence whose other half
+    forbids something (otherwise a general LaTeX question can look like the forbidden "LaTeX formatting")."""
+    out = []
+    for sent in re.split(r'(?<=[.!?])\s+', re.sub(r'\s+', ' ', policy or '')):
+        for m in _PERMIT.finditer(sent):
+            c = re.split(r',\s*(?:but|and\s+(?:not|never)|however|though|while)\b|\s+(?:but|however)\s+', m.group(1))[0]
+            c = re.sub(r'\s+(?:so long as|as long as|provided|unless|if)\b.*$', '', c, flags=re.I).strip(' ,')
+            if len(c.split()) > 24:
+                c = c.split(',')[0].strip()                   # a long run-on: keep the first part, before the comma
+            c = re.sub(r'\bL\s?A\s?T\s?E\s?X\b', 'LaTeX', c)          # PDFs often spell it out with spaces
+            if 3 <= len(c.split()) <= 24 and c not in out:
+                out.append(c)
+    return out[:10]
+
+
+_NEGATED = re.compile(r"\b(?:don'?t|do not|dont|never|no need to|not to)\s+(?:you\s+|actually\s+|really\s+)*(?:do|solve|give|provide|write|answer|show|complete|finish|include|tell)\b[^,.;!?]*?(?=\s+(?:but|just|only|and then|instead)\b|[,.;!?]|$)", re.I)
+
+
+def _without_negations(text):
+    """Takes out the parts of a message that say what the student does NOT want ("don't solve it", "don't give me the answer"), so the
+    small model judges what is actually being asked. A message that asks for something else in the same breath keeps that request."""
+    out = re.sub(r'\s+', ' ', _NEGATED.sub(' ', text or '')).strip(' ,.;')
     return out
 
 
@@ -472,6 +502,9 @@ class AIGuard:
             if item and not _placeholder(item) and not any(_overlap(_words(item), _words(f['item'])) > 0.85 for f in forbidden):
                 forbidden.append({'item': item, 'quote': quote if quote and distill.quote_is_real(quote, src) else ''})
         allowed = list(dict.fromkeys(str(a).strip() for a in (data.get('allowed') or [])[:15] if str(a).strip()))
+        for c in _permission_clauses(policy):
+            if not any(_overlap(_words(c), _words(a)) > 0.6 for a in allowed):
+                allowed.append(c)
         # A second pass for anything the first one missed. Only additions that quote the policy for real are kept, so a
         # small model can't invent rules here; it can only find ones that were left out.
         try:
@@ -574,6 +607,13 @@ class AIGuard:
                 f'Where the student is typing: {where}\nStudent message:\n<<<\n{text[:3000]}\n>>>')
 
     def _classify_result(self, text, cls, asg, where, timeout, items, kw):
+        stripped = _without_negations(text)
+        if stripped != text.strip():
+            if len(stripped.split()) < 2:                          # everything in it was "don't ...": it asks for nothing
+                note = kw['level'] == 'note'
+                return {'level': 'note' if note else 'ok', 'hard': False, 'reasons': kw['reasons'] if note else [], 'tip': '',
+                        'verdict': 'allow', 'source': 'ai'}
+            text = stripped
         raw = self.engine.chat_raw(CLASSIFY_SYSTEM, self._classify_prompt(text, cls, items, where), timeout=timeout, max_tokens=90)
         m = re.search(r'"match"\s*:\s*"?(\d+)', raw)
         if not m:
