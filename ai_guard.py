@@ -51,7 +51,8 @@ How to match, with unrelated examples (a cooking class whose forbidden list is: 
 - "here's my dish, is the plating okay?" -> {"match": 2, "suggestion": "Ask a general question about plating, without describing your dish."}
 - "put my recipe card into Spanish" -> {"match": 3, "suggestion": "Ask what a Spanish cooking term means."}
 - "why does bread need to rise?" -> {"match": 0, "suggestion": ""}
-A reworded or shortened request still matches: what counts is the action the student wants done, not the exact words.
+- "don't write the recipe for me, just tell me which baking ideas I should read up on" -> {"match": 0, "suggestion": ""}
+A message that says what the student does NOT want ("don't solve it", "no answers, just an overview") is not asking for that. A reworded or shortened request still matches: what counts is the action the student wants done, not the exact words.
 
 Reply with JSON only: {"match": <number of the forbidden item, or 0>, "suggestion": "<at most 15 words the student could ask instead, or empty if match is 0>"}"""
 
@@ -198,7 +199,33 @@ def build_prompt(text, cls, asg, where):
 
 
 # Saved checklists are tied to the instructions that wrote them: change those and every checklist is rebuilt the next time.
-EXTRACT_VERSION = hashlib.sha1((EXTRACT_SYSTEM + EXTRACT_MORE_SYSTEM + VERIFY_SYSTEM).encode()).hexdigest()[:8]
+EXTRACT_VERSION = hashlib.sha1((EXTRACT_SYSTEM + EXTRACT_MORE_SYSTEM + VERIFY_SYSTEM + 'filter2').encode()).hexdigest()[:8]
+
+
+_STOP = set('ai a i the a an to of for your you with use using ask asking it in on or and from any own get give have make do help this that them they be is are not no into about'.split())
+
+
+def _stems(text):
+    return {w[:4] for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 4 and w not in _STOP}
+
+
+def _drop_unsupported(items):
+    """A small model sometimes justifies several invented rules with the one sentence it did find (for example "use AI to help with
+    studying" quoting "you should NOT ask it to directly solve a problem"). The first item for a sentence is kept as it is; any further
+    item citing the same sentence has to share real words with it, or it was made up."""
+    seen, out = {}, []
+    for f in items:
+        q = f.get('quote') or ''
+        key = re.sub(r'\W+', ' ', q.lower()).strip()
+        if key and key in seen:
+            st = _stems(f['item'])
+            if st and not (st & _stems(q)):
+                print(f'[guard] dropped checklist item its quote does not support: {f["item"]}', flush=True)
+                continue
+        if key:
+            seen[key] = True
+        out.append(f)
+    return out
 
 
 class AIGuard:
@@ -483,6 +510,7 @@ class AIGuard:
                 pass
             kept.append(f)
         forbidden = [f for f in kept if not (f['quote'] and PERMISSION.search(f['quote']))]   # "You can copy your own work…" is a permission
+        forbidden = _drop_unsupported(forbidden)
         if not forbidden and BAN_HINT.search(cp + ' ' + ap):
             return None            # the policy clearly forbids something but we found nothing: don't trust an empty list
         print(f'[guard] checklist for {cls["name"]}{" / " + asg["name"] if asg else ""}: '
