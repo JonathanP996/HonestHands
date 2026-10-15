@@ -1102,3 +1102,16 @@ body:has(#surface.onbing) #shell{padding:14px}
 .pv{display:inline-flex;align-items:center;gap:5px;font-weight:700;vertical-align:bottom}.pv svg{width:14px;height:14px;flex:none}
 .pv.up{color:#4E8A3A}.pv.down{color:var(--stop)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pv.up{color:#B7DFA5}}:root[data-theme="dark"] .pv.up{color:#B7DFA5}
+
+/* opening the app: the rail slides in, its buttons ripple down, the page header drops in, then the content and the verse fade up */
+body.boot #rail{animation:bootrail .55s cubic-bezier(.2,.8,.2,1) both}
+body.boot #rail .logo{animation:bootpop .6s cubic-bezier(.3,1.4,.4,1) .12s both}
+body.boot .railbtn{animation:bootitem .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 55ms + 160ms)}
+body.boot #topbar{animation:bootdrop .55s cubic-bezier(.2,.8,.2,1) .15s both}
+body.boot #main{animation:reveal .55s cubic-bezier(.2,.75,.15,1) .3s both}
+body.boot #verse{animation:fade .8s ease .65s both}
+@keyframes bootrail{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes bootpop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@keyframes bootitem{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes bootdrop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){body.boot #rail,body.boot #rail .logo,body.boot .railbtn,body.boot #topbar,body.boot #main,body.boot #verse{animation:none}}
